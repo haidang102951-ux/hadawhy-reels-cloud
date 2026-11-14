@@ -1,0 +1,668 @@
+import React from "react";
+import {
+  AbsoluteFill,
+  Img,
+  Sequence,
+  interpolate,
+  spring,
+  staticFile,
+  useCurrentFrame,
+  useVideoConfig,
+} from "remotion";
+import { HaDaWhyMistBackground } from "./components/HaDaWhyMistBackground";
+import { ChannelWatermark9x16 } from "./components/ChannelWatermark9x16";
+import { KineticWordCaption, CaptionPhrase } from "./components/KineticWordCaption";
+import {
+  SAT_FRA_PARIS,
+  SAT_FRA_PATH,
+  SAT_UK_LONDON,
+  SAT_UK_PATH,
+  SAT_USA_NYC,
+  SAT_USA_PATH,
+  SAT_WORLD_HUBS,
+} from "./friday13SatMapsData";
+import defaultPlan from "./scene_plan.json";
+
+export interface UniversalSceneSpec {
+  id: string;
+  startSec: number;
+  endSec: number;
+  layout: "hero_prop" | "compare_two" | "sat_map" | "two_tier" | "split_duo";
+  eyebrow: string;
+  heroText: string;
+  heroColor?: string;
+  subNote?: string;
+  yearWatermark?: string;
+  primaryAsset?: string;
+  primaryLabel?: string;
+  leftAsset?: string;
+  leftLabel?: string;
+  leftLabelColor?: string;
+  rightAsset?: string;
+  rightLabel?: string;
+  rightLabelColor?: string;
+  centerAsset?: string;
+  mapRegion?: "uk" | "fra" | "usa" | "world";
+  mapCaption?: string;
+  topLeftAsset?: string;
+  topLeftLabel?: string;
+  topRightAsset?: string;
+  bottomAsset?: string;
+  bottomTitle?: string;
+  bottomHighlight?: string;
+  ctaText?: string;
+}
+
+export interface UniversalScenePlan {
+  projectTitle: string;
+  fps: number;
+  mistIntensity?: number;
+  scenes: UniversalSceneSpec[];
+  captions: CaptionPhrase[];
+}
+
+export interface HaDaWhyUniversal9x16Props {
+  plan?: UniversalScenePlan;
+}
+
+const FONT_CSS = `
+@font-face {
+  font-family: 'BeVietnamProBlack';
+  src: url('${staticFile("fonts/BeVietnamPro-Black.ttf")}') format('truetype');
+  font-weight: 900;
+}
+@font-face {
+  font-family: 'BeVietnamProExtraBold';
+  src: url('${staticFile("fonts/BeVietnamPro-ExtraBold.ttf")}') format('truetype');
+  font-weight: 800;
+}
+@font-face {
+  font-family: 'KanitBlack';
+  src: url('${staticFile("fonts/Kanit-Black.ttf")}') format('truetype');
+  font-weight: 900;
+}
+`;
+
+const FONT_HEADING = `'KanitBlack', 'BeVietnamProBlack', sans-serif`;
+const FONT_BODY = `'BeVietnamProExtraBold', 'BeVietnamProBlack', sans-serif`;
+
+const ImpactHook: React.FC<{
+  eyebrow: string;
+  heroText: string;
+  heroColor?: string;
+  subNote?: string;
+}> = ({ eyebrow, heroText, heroColor = "#ff3b3b", subNote }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const pop = spring({ frame, fps, config: { damping: 13, stiffness: 180 } });
+  const scale = interpolate(pop, [0, 1], [1.22, 1]);
+  const opacity = interpolate(frame, [0, 8], [0, 1], { extrapolateRight: "clamp" });
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 130,
+        left: 56,
+        right: 56,
+        textAlign: "center",
+        zIndex: 25,
+        opacity,
+        transform: `scale(${scale})`,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: FONT_BODY,
+          fontSize: 38,
+          fontWeight: 900,
+          letterSpacing: 2.5,
+          color: "#FFFFFF",
+          textShadow: "0 4px 18px rgba(0,0,0,0.9)",
+        }}
+      >
+        {eyebrow}
+      </div>
+      <div
+        style={{
+          fontFamily: FONT_HEADING,
+          fontSize: heroText.length > 10 ? 78 : 110,
+          fontWeight: 900,
+          lineHeight: 1.02,
+          marginTop: 6,
+          color: heroColor,
+          WebkitTextStroke: "12px #09090b",
+          paintOrder: "stroke fill",
+          filter: `drop-shadow(0 0 28px ${heroColor}66) drop-shadow(0 10px 24px rgba(0,0,0,0.92))`,
+        }}
+      >
+        {heroText}
+      </div>
+      {subNote ? (
+        <div
+          style={{
+            marginTop: 14,
+            fontFamily: FONT_BODY,
+            fontSize: 30,
+            fontWeight: 900,
+            color: "#facc15",
+            letterSpacing: 1.4,
+            textShadow: "0 4px 14px rgba(0,0,0,0.95)",
+          }}
+        >
+          {subNote}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+const WatermarkYear: React.FC<{ text?: string }> = ({ text }) => {
+  if (!text) return null;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 320,
+        left: 0,
+        right: 0,
+        textAlign: "center",
+        fontFamily: FONT_HEADING,
+        fontSize: 280,
+        fontWeight: 900,
+        color: "rgba(66, 178, 242, 0.045)",
+        letterSpacing: -6,
+        userSelect: "none",
+        pointerEvents: "none",
+        zIndex: 2,
+      }}
+    >
+      {text}
+    </div>
+  );
+};
+
+const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const enter = spring({ frame: frame - 4, fps, config: { damping: 14, stiffness: 120 } });
+  const floatY = Math.sin(frame * 0.05) * 10;
+
+  return (
+    <AbsoluteFill>
+      <WatermarkYear text={scene.yearWatermark} />
+      <ImpactHook
+        eyebrow={scene.eyebrow}
+        heroText={scene.heroText}
+        heroColor={scene.heroColor}
+        subNote={scene.subNote}
+      />
+      {scene.primaryAsset ? (
+        <div
+          style={{
+            position: "absolute",
+            top: 470,
+            left: 0,
+            right: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            transform: `translateY(${floatY}px) scale(${interpolate(enter, [0, 1], [0.88, 1])})`,
+            opacity: enter,
+            zIndex: 12,
+          }}
+        >
+          <Img
+            src={staticFile(scene.primaryAsset)}
+            style={{
+              height: 680,
+              maxWidth: 840,
+              objectFit: "contain",
+              filter: "drop-shadow(0 30px 44px rgba(0,0,0,0.92))",
+            }}
+          />
+          {scene.primaryLabel ? (
+            <div
+              style={{
+                marginTop: 22,
+                fontFamily: FONT_BODY,
+                fontSize: 30,
+                fontWeight: 900,
+                color: "#FFFFFF",
+                textShadow: "0 4px 12px rgba(0,0,0,0.95)",
+              }}
+            >
+              {scene.primaryLabel}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </AbsoluteFill>
+  );
+};
+
+const SceneCompareTwo: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const leftIn = spring({ frame: frame - 4, fps, config: { damping: 14, stiffness: 120 } });
+  const rightIn = spring({ frame: frame - 10, fps, config: { damping: 14, stiffness: 120 } });
+
+  return (
+    <AbsoluteFill>
+      <WatermarkYear text={scene.yearWatermark} />
+      <ImpactHook eyebrow={scene.eyebrow} heroText={scene.heroText} heroColor={scene.heroColor} />
+
+      <div
+        style={{
+          position: "absolute",
+          top: 470,
+          left: 44,
+          right: 44,
+          height: 820,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          zIndex: 12,
+        }}
+      >
+        {/* Left subject */}
+        <div
+          style={{
+            width: 440,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            transform: `translateX(${interpolate(leftIn, [0, 1], [-80, 0])}px)`,
+            opacity: leftIn,
+          }}
+        >
+          {scene.leftAsset ? (
+            <Img
+              src={staticFile(scene.leftAsset)}
+              style={{
+                height: 620,
+                maxWidth: 420,
+                objectFit: "contain",
+                filter: "drop-shadow(0 24px 36px rgba(0,0,0,0.92))",
+              }}
+            />
+          ) : null}
+          {scene.leftLabel ? (
+            <div
+              style={{
+                marginTop: 18,
+                fontFamily: FONT_BODY,
+                fontSize: 24,
+                fontWeight: 900,
+                color: scene.leftLabelColor || "#facc15",
+                textAlign: "center",
+                textShadow: "0 4px 12px rgba(0,0,0,0.98)",
+              }}
+            >
+              {scene.leftLabel}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Center link / chain */}
+        {scene.centerAsset ? (
+          <Img
+            src={staticFile(scene.centerAsset)}
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: 210,
+              width: 240,
+              transform: "translateX(-50%) rotate(-18deg)",
+              opacity: 0.9,
+              filter: "drop-shadow(0 12px 24px rgba(0,0,0,0.95))",
+              zIndex: 14,
+            }}
+          />
+        ) : null}
+
+        {/* Right subject */}
+        <div
+          style={{
+            width: 440,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            transform: `translateX(${interpolate(rightIn, [0, 1], [80, 0])}px)`,
+            opacity: rightIn,
+          }}
+        >
+          {scene.rightAsset ? (
+            <Img
+              src={staticFile(scene.rightAsset)}
+              style={{
+                height: 620,
+                maxWidth: 420,
+                objectFit: "contain",
+                filter: "drop-shadow(0 24px 36px rgba(0,0,0,0.92))",
+              }}
+            />
+          ) : null}
+          {scene.rightLabel ? (
+            <div
+              style={{
+                marginTop: 18,
+                fontFamily: FONT_BODY,
+                fontSize: 24,
+                fontWeight: 900,
+                color: scene.rightLabelColor || "#ff3b3b",
+                textAlign: "center",
+                textShadow: "0 4px 12px rgba(0,0,0,0.98)",
+              }}
+            >
+              {scene.rightLabel}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+const SceneSatMap: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const pop = spring({ frame: frame - 3, fps, config: { damping: 14, stiffness: 110 } });
+  const region = scene.mapRegion || "fra";
+
+  const mapConfig = {
+    uk: { img: "harvested/sat_uk.png", path: SAT_UK_PATH, pin: SAT_UK_LONDON },
+    fra: { img: "harvested/sat_fra.png", path: SAT_FRA_PATH, pin: SAT_FRA_PARIS },
+    usa: { img: "harvested/sat_usa.png", path: SAT_USA_PATH, pin: SAT_USA_NYC },
+    world: { img: "harvested/sat_world.png", path: "", pin: SAT_WORLD_HUBS[0] },
+  }[region];
+
+  const pulse = 1 + Math.sin(frame * 0.14) * 0.22;
+
+  return (
+    <AbsoluteFill>
+      <ImpactHook eyebrow={scene.eyebrow} heroText={scene.heroText} heroColor={scene.heroColor} />
+      <div
+        style={{
+          position: "absolute",
+          top: 470,
+          left: 65,
+          right: 65,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          transform: `perspective(1200px) rotateX(18deg) scale(${interpolate(pop, [0, 1], [0.9, 1])})`,
+          opacity: pop,
+          zIndex: 12,
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            width: 920,
+            height: 700,
+            borderRadius: 28,
+            overflow: "hidden",
+            border: "3px solid rgba(66, 178, 242, 0.55)",
+            boxShadow: "0 36px 72px rgba(0,0,0,0.92), 0 0 36px rgba(66,178,242,0.22)",
+          }}
+        >
+          <Img
+            src={staticFile(mapConfig.img)}
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          />
+          <svg
+            viewBox="0 0 920 700"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+          >
+            {mapConfig.path ? (
+              <path
+                d={mapConfig.path}
+                fill="rgba(250,204,21,0.08)"
+                stroke="#facc15"
+                strokeWidth={3.5}
+              />
+            ) : null}
+            {mapConfig.pin ? (
+              <g transform={`translate(${mapConfig.pin.x}, ${mapConfig.pin.y})`}>
+                <circle r={18 * pulse} fill="rgba(239,68,68,0.28)" stroke="#ef4444" strokeWidth={2} />
+                <circle r={8} fill="#ff3b3b" stroke="#ffffff" strokeWidth={2.5} />
+              </g>
+            ) : null}
+          </svg>
+        </div>
+        {scene.mapCaption ? (
+          <div
+            style={{
+              marginTop: 28,
+              fontFamily: FONT_BODY,
+              fontSize: 30,
+              fontWeight: 900,
+              color: "#facc15",
+              letterSpacing: 1.5,
+              textShadow: "0 4px 14px rgba(0,0,0,0.95)",
+            }}
+          >
+            {scene.mapCaption}
+          </div>
+        ) : null}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+const SceneTwoTier: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const pop = spring({ frame: frame - 4, fps, config: { damping: 14, stiffness: 120 } });
+
+  return (
+    <AbsoluteFill>
+      <WatermarkYear text={scene.yearWatermark} />
+      <ImpactHook eyebrow={scene.eyebrow} heroText={scene.heroText} heroColor={scene.heroColor} />
+
+      {/* Tier 1: Top portrait + evidence */}
+      <div
+        style={{
+          position: "absolute",
+          top: 410,
+          left: 70,
+          right: 70,
+          height: 410,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          opacity: pop,
+          zIndex: 12,
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 450 }}>
+          {scene.topLeftAsset ? (
+            <Img
+              src={staticFile(scene.topLeftAsset)}
+              style={{
+                height: 330,
+                objectFit: "contain",
+                filter: "drop-shadow(0 18px 28px rgba(0,0,0,0.9))",
+              }}
+            />
+          ) : null}
+          {scene.topLeftLabel ? (
+            <div
+              style={{
+                marginTop: 10,
+                fontFamily: FONT_BODY,
+                fontSize: 22,
+                fontWeight: 900,
+                color: "#FFFFFF",
+              }}
+            >
+              {scene.topLeftLabel}
+            </div>
+          ) : null}
+        </div>
+        {scene.topRightAsset ? (
+          <Img
+            src={staticFile(scene.topRightAsset)}
+            style={{
+              height: 360,
+              objectFit: "contain",
+              transform: "rotate(4deg)",
+              filter: "drop-shadow(0 22px 32px rgba(0,0,0,0.92))",
+            }}
+          />
+        ) : null}
+      </div>
+
+      {/* Tier 2: Bottom archival backdrop + title */}
+      <div
+        style={{
+          position: "absolute",
+          top: 860,
+          left: 70,
+          right: 70,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          opacity: pop,
+          zIndex: 12,
+        }}
+      >
+        {scene.bottomAsset ? (
+          <Img
+            src={staticFile(scene.bottomAsset)}
+            style={{
+              width: 940,
+              height: 360,
+              objectFit: "cover",
+              borderRadius: 18,
+              border: "2px solid rgba(255,255,255,0.22)",
+              boxShadow: "0 24px 48px rgba(0,0,0,0.9)",
+            }}
+          />
+        ) : null}
+        {scene.bottomTitle ? (
+          <div style={{ marginTop: 18, textAlign: "center" }}>
+            <div style={{ fontFamily: FONT_BODY, fontSize: 28, fontWeight: 900, color: "#FFFFFF" }}>
+              {scene.bottomTitle}
+            </div>
+            {scene.bottomHighlight ? (
+              <div style={{ fontFamily: FONT_HEADING, fontSize: 56, fontWeight: 900, color: "#ff3b3b" }}>
+                {scene.bottomHighlight}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+const SceneSplitDuo: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const pop = spring({ frame: frame - 4, fps, config: { damping: 14, stiffness: 120 } });
+
+  return (
+    <AbsoluteFill>
+      <ImpactHook eyebrow={scene.eyebrow} heroText={scene.heroText} heroColor={scene.heroColor} />
+      <div
+        style={{
+          position: "absolute",
+          top: 470,
+          left: 60,
+          right: 60,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          opacity: pop,
+          zIndex: 12,
+        }}
+      >
+        <div style={{ width: 410, textAlign: "center" }}>
+          {scene.leftAsset ? (
+            <Img
+              src={staticFile(scene.leftAsset)}
+              style={{ height: 480, maxWidth: 390, objectFit: "contain", transform: "rotate(-3deg)" }}
+            />
+          ) : null}
+          {scene.leftLabel ? (
+            <div style={{ marginTop: 14, fontFamily: FONT_BODY, fontSize: 26, fontWeight: 900, color: "#facc15" }}>
+              {scene.leftLabel}
+            </div>
+          ) : null}
+        </div>
+        <div style={{ fontFamily: FONT_HEADING, fontSize: 64, fontWeight: 900, color: "#FFFFFF" }}>+</div>
+        <div style={{ width: 410, textAlign: "center" }}>
+          {scene.rightAsset ? (
+            <Img
+              src={staticFile(scene.rightAsset)}
+              style={{
+                height: 480,
+                maxWidth: 390,
+                objectFit: "contain",
+                borderRadius: 12,
+                transform: "rotate(3deg)",
+              }}
+            />
+          ) : null}
+          {scene.rightLabel ? (
+            <div style={{ marginTop: 14, fontFamily: FONT_BODY, fontSize: 26, fontWeight: 900, color: "#ff3b3b" }}>
+              {scene.rightLabel}
+            </div>
+          ) : null}
+        </div>
+      </div>
+      {scene.ctaText ? (
+        <div
+          style={{
+            position: "absolute",
+            top: 1120,
+            left: 70,
+            right: 70,
+            textAlign: "center",
+            fontFamily: FONT_BODY,
+            fontSize: 32,
+            fontWeight: 900,
+            color: "#FFFFFF",
+            borderTop: "2px solid rgba(66, 178, 242, 0.45)",
+            paddingTop: 22,
+            zIndex: 14,
+          }}
+        >
+          {scene.ctaText}
+        </div>
+      ) : null}
+    </AbsoluteFill>
+  );
+};
+
+export const HaDaWhyUniversal9x16: React.FC<HaDaWhyUniversal9x16Props> = ({
+  plan = defaultPlan as unknown as UniversalScenePlan,
+}) => {
+  const { fps } = useVideoConfig();
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: "#04060a" }}>
+      <style>{FONT_CSS}</style>
+      <HaDaWhyMistBackground intensity={plan.mistIntensity ?? 0.11} />
+      <ChannelWatermark9x16 />
+
+      {plan.scenes.map((scene) => {
+        const from = Math.round(scene.startSec * fps);
+        const durationInFrames = Math.max(1, Math.round((scene.endSec - scene.startSec) * fps));
+        return (
+          <Sequence key={scene.id} from={from} durationInFrames={durationInFrames}>
+            {scene.layout === "hero_prop" && <SceneHeroProp scene={scene} />}
+            {scene.layout === "compare_two" && <SceneCompareTwo scene={scene} />}
+            {scene.layout === "sat_map" && <SceneSatMap scene={scene} />}
+            {scene.layout === "two_tier" && <SceneTwoTier scene={scene} />}
+            {scene.layout === "split_duo" && <SceneSplitDuo scene={scene} />}
+          </Sequence>
+        );
+      })}
+
+      <KineticWordCaption phrases={plan.captions} placement="bottom" />
+    </AbsoluteFill>
+  );
+};

@@ -1,0 +1,13 @@
+{
+  "name": "remotion_reels",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@remotion/captions": "^4.0.541",
+    "@remotion/motion-blur": "^4.0.541",
+    "@remotion/shapes": "^4.0.541",
+    "remotion": "^4.0.541",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}

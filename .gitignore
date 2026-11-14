@@ -1,0 +1,25 @@
+# Node / Remotion
+node_modules/
+remotion_reels/node_modules/
+remotion_reels/.remotion/
+remotion_reels/out/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Outputs & Temp
+cloud_out/
+temp_render/
+*.mp4
+*.mov
+*.avi
+*.wav
+*.mp3
+*.log
+.DS_Store
+Thumbs.db
+.env
