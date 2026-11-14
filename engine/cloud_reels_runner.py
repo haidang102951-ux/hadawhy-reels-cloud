@@ -278,8 +278,16 @@ def mode_preview() -> list[Path]:
     return outputs
 
 
+def _normalize_vi_numbers(text: str) -> str:
+    import re
+    text = re.sub(r"(\d+)%", r"\1 phần trăm", text)
+    text = re.sub(r"(\d+)\s*k\b", r"\1 nghìn", text, flags=re.IGNORECASE)
+    text = re.sub(r"(\d+)\s*đ\b", r"\1 đồng", text, flags=re.IGNORECASE)
+    return text
+
+
 def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
-    """Build Vietnamese voiceover (edge-tts) + Text Hook SFX + Ducked BGM at -14.0 LUFS."""
+    """Build Vietnamese voiceover (VieNeu-TTS 'Hải Đăng', fallback edge-tts) + Text Hook SFX + Ducked BGM at -14.0 LUFS."""
     scenes = plan.get("scenes", [])
     captions = plan.get("captions", [])
     total_dur = max((float(s.get("endSec", 0)) for s in scenes), default=10.0)
@@ -295,7 +303,16 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
     ]
     bgm_path = BASE_DIR / "assets" / "music" / "hadawhy_mystery_bgm.mp3"
 
-    # 1. Generate per-phrase Vietnamese voiceover clips via edge-tts
+    # Initialize VieNeu-TTS (channel voice: Hải Đăng)
+    vieneu_client = None
+    try:
+        from vieneu import Vieneu  # type: ignore
+        vieneu_client = Vieneu()
+        print("[TTS] VieNeu-TTS initialized (voice: Hải Đăng)")
+    except Exception as exc:
+        print(f"[WARN] VieNeu-TTS unavailable, falling back to edge-tts: {exc}")
+
+    # 1. Generate per-phrase Vietnamese voiceover clips
     vo_entries: list[tuple[Path, int]] = []
     for idx, phrase in enumerate(captions):
         words = []
@@ -307,6 +324,19 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
         text = " ".join(words).strip()
         if not text:
             continue
+        delay_ms = max(0, int(round(float(phrase.get("startSec", 0)) * 1000)))
+        if vieneu_client is not None:
+            vo_wav = temp_dir / f"vo_{idx:02d}.wav"
+            try:
+                clean_text = _normalize_vi_numbers(text)
+                audio = vieneu_client.infer(clean_text, voice="Hải Đăng", temperature=0.35, top_p=0.9)
+                vieneu_client.save(audio, str(vo_wav))
+                if vo_wav.exists() and vo_wav.stat().st_size > 0:
+                    vo_entries.append((vo_wav, delay_ms))
+                    continue
+            except Exception as exc:
+                print(f"[WARN] VieNeu-TTS failed for phrase {idx}: {exc}")
+
         vo_mp3 = temp_dir / f"vo_{idx:02d}.mp3"
         try:
             subprocess.run(
@@ -325,7 +355,6 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
                 check=True,
             )
             if vo_mp3.exists() and vo_mp3.stat().st_size > 0:
-                delay_ms = max(0, int(round(float(phrase.get("startSec", 0)) * 1000)))
                 vo_entries.append((vo_mp3, delay_ms))
         except Exception as exc:
             print(f"[WARN] edge-tts failed for phrase {idx}: {exc}")
