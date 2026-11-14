@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@remotion/captions": "^4.0.541",
+    "@remotion/cli": "^4.0.541",
     "@remotion/motion-blur": "^4.0.541",
     "@remotion/shapes": "^4.0.541",
     "remotion": "^4.0.541",
