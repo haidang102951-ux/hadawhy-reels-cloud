@@ -173,15 +173,42 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
         Image.open(io.BytesIO(raw_bytes)).convert("RGBA").save(out_path, "PNG")
 
 
+def _call_gemini_json(prompt: str) -> dict:
+    import requests  # type: ignore
+
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is required")
+
+    last_err = None
+    for model in ("gemini-3.8-flash", "gemini-flash-latest"):
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"responseMimeType": "application/json"},
+        }
+        try:
+            print(f"[GEMINI] Calling {model}...")
+            r = requests.post(url, json=payload, timeout=90)
+            if r.status_code == 404:
+                print(f"[GEMINI] {model} returned 404, trying next model...")
+                last_err = r.text
+                continue
+            r.raise_for_status()
+            data = r.json()
+            text = data["candidates"][0]["content"]["parts"][0]["text"]
+            raw = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            return json.loads(raw)
+        except Exception as exc:
+            print(f"[GEMINI] {model} error: {exc}")
+            last_err = exc
+    raise RuntimeError(f"All Gemini models failed: {last_err}")
+
+
 def mode_create(topic_prompt: str) -> None:
     if not topic_prompt.strip():
         raise RuntimeError("Topic prompt (--feedback) is required for --mode create/auto")
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is required for --mode create/auto")
-    from google import genai  # type: ignore
 
-    client = genai.Client(api_key=api_key)
     prompt = f"""Bạn là Tổng Đạo Diễn video ngắn dọc 9:16 (60fps) kênh HaDa Why (@hadawhy).
 Hãy sáng tác trọn bộ JSON scene_plan cho yêu cầu sau của Người Chỉ Huy:
 "{topic_prompt}"
@@ -217,21 +244,13 @@ QUY TẮC BẮT BUỘC:
 5. Thời lượng tổng (endSec của scene cuối) phải khớp đúng yêu cầu (mặc định 15-30s nếu không nói rõ).
 6. Lời thoại tiếng Việt súc tích, bóc trần bản chất, chia từng từ trong captions khớp nhịp thời gian."""
 
-    resp = client.models.generate_content(model="gemini-3.8-flash", contents=prompt)
-    raw = (resp.text or "").strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-    parsed = json.loads(raw)
+    parsed = _call_gemini_json(prompt)
     PLAN_PATH.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[CREATE] Generated {PLAN_PATH} for topic: {topic_prompt}")
     harvest_assets(parsed, clean=True)
 
 
 def mode_revise(feedback: str) -> None:
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is required for --mode revise")
-    from google import genai  # type: ignore
-
-    client = genai.Client(api_key=api_key)
     current_plan = PLAN_PATH.read_text(encoding="utf-8")
     prompt = (
         "Bạn là Đạo diễn kỹ thuật Remotion. Hãy cập nhật JSON scene_plan dưới đây theo đúng góp ý của Người Chỉ Huy.\n"
@@ -239,9 +258,7 @@ def mode_revise(feedback: str) -> None:
         f"GÓP Ý CẦN SỬA:\n{feedback}\n\n"
         f"SCENE_PLAN HIỆN TẠI:\n{current_plan}"
     )
-    resp = client.models.generate_content(model="gemini-3.8-flash", contents=prompt)
-    raw = (resp.text or "").strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-    parsed = json.loads(raw)
+    parsed = _call_gemini_json(prompt)
     PLAN_PATH.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[REVISE] Updated {PLAN_PATH}")
 
