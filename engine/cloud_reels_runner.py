@@ -177,32 +177,59 @@ def _call_gemini_json(prompt: str) -> dict:
     import requests  # type: ignore
 
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError("GEMINI_API_KEY is required")
-
+    gh_token = os.getenv("GITHUB_TOKEN", "").strip()
     last_err = None
-    for model in ("gemini-3.8-flash", "gemini-flash-latest"):
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"responseMimeType": "application/json"},
-        }
-        try:
-            print(f"[GEMINI] Calling {model}...")
-            r = requests.post(url, json=payload, timeout=90)
-            if r.status_code == 404:
-                print(f"[GEMINI] {model} returned 404, trying next model...")
-                last_err = r.text
-                continue
-            r.raise_for_status()
-            data = r.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            raw = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-            return json.loads(raw)
-        except Exception as exc:
-            print(f"[GEMINI] {model} error: {exc}")
-            last_err = exc
-    raise RuntimeError(f"All Gemini models failed: {last_err}")
+
+    if api_key:
+        for model in ("gemini-3.8-flash", "gemini-flash-latest"):
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"responseMimeType": "application/json"},
+            }
+            try:
+                print(f"[GEMINI] Calling {model}...")
+                r = requests.post(url, json=payload, timeout=45)
+                if r.status_code == 404:
+                    print(f"[GEMINI] {model} returned 404, trying next model...")
+                    last_err = r.text
+                    continue
+                r.raise_for_status()
+                data = r.json()
+                text = data["candidates"][0]["content"]["parts"][0]["text"]
+                raw = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                return json.loads(raw)
+            except Exception as exc:
+                print(f"[GEMINI] {model} error: {exc}")
+                last_err = exc
+
+    if gh_token:
+        for gh_model in ("openai/gpt-4o-mini", "openai/gpt-4o"):
+            try:
+                print(f"[GITHUB_MODELS] Falling back to {gh_model}...")
+                r = requests.post(
+                    "https://models.github.ai/inference/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {gh_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": gh_model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "response_format": {"type": "json_object"},
+                        "temperature": 0.4,
+                    },
+                    timeout=60,
+                )
+                r.raise_for_status()
+                text = r.json()["choices"][0]["message"]["content"]
+                raw = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                return json.loads(raw)
+            except Exception as exc:
+                print(f"[GITHUB_MODELS] {gh_model} error: {exc}")
+                last_err = exc
+
+    raise RuntimeError(f"All LLM providers (Gemini + GitHub Models) failed: {last_err}")
 
 
 def mode_create(topic_prompt: str) -> None:
