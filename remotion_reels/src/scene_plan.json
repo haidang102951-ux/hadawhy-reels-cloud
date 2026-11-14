@@ -1,12 +1,12 @@
 {
-  "projectTitle": "Bi_Mat_Thu_Sau_Ngay_13_Cloud_Test",
+  "projectTitle": "HaDaWhy_Cloud_Test_10s",
   "fps": 60,
   "mistIntensity": 0.11,
   "scenes": [
     {
       "id": "scene_1_hook",
       "startSec": 0,
-      "endSec": 4.2,
+      "endSec": 3.5,
       "layout": "hero_prop",
       "eyebrow": "THỨ SÁU NGÀY",
       "heroText": "13",
@@ -18,8 +18,8 @@
     },
     {
       "id": "scene_2_france_1307",
-      "startSec": 4.2,
-      "endSec": 8.6,
+      "startSec": 3.5,
+      "endSec": 7.0,
       "layout": "compare_two",
       "eyebrow": "BIẾN CỐ THỨ SÁU",
       "heroText": "13/10/1307",
@@ -35,50 +35,20 @@
     },
     {
       "id": "scene_3_sat_map",
-      "startSec": 8.6,
-      "endSec": 12.8,
+      "startSec": 7.0,
+      "endSec": 10.0,
       "layout": "sat_map",
       "eyebrow": "TÂM ĐIỂM LỊCH SỬ",
       "heroText": "PARIS, PHÁP",
       "heroColor": "#42B2F2",
       "mapRegion": "fra",
       "mapCaption": "LỆNH BẮT ĐỒNG LOẠT 13/10/1307"
-    },
-    {
-      "id": "scene_4_lawson_1907",
-      "startSec": 12.8,
-      "endSec": 17.2,
-      "layout": "two_tier",
-      "eyebrow": "TIỂU THUYẾT PHỐ WALL",
-      "heroText": "NĂM 1907",
-      "heroColor": "#facc15",
-      "yearWatermark": "1907",
-      "topLeftAsset": "harvested/thomas_lawson_portrait.png",
-      "topLeftLabel": "THOMAS W. LAWSON",
-      "topRightAsset": "harvested/lawson_1907_book_evidence.png",
-      "bottomAsset": "harvested/wallstreet_nyse_backdrop.png",
-      "bottomTitle": "THAO TÚNG SẬP SÀN",
-      "bottomHighlight": "THỨ SÁU 13"
-    },
-    {
-      "id": "scene_5_outro",
-      "startSec": 17.2,
-      "endSec": 21.0,
-      "layout": "split_duo",
-      "eyebrow": "DO CON NGƯỜI",
-      "heroText": "TỰ TAY TẠO RA!",
-      "heroColor": "#ff3b3b",
-      "leftAsset": "harvested/lawson_1907_book_evidence.png",
-      "leftLabel": "TIỂU THUYẾT 1907",
-      "rightAsset": "harvested/friday_13th_1980_poster.jpg",
-      "rightLabel": "PHIM KINH DỊ 1980",
-      "ctaText": "CÒN BẠN CÓ SỢ THỨ SÁU NGÀY 13 KHÔNG?"
     }
   ],
   "captions": [
     {
       "startSec": 0.1,
-      "endSec": 4.1,
+      "endSec": 3.4,
       "lines": [
         [
           { "text": "THỨ", "startSec": 0.1, "endSec": 0.5, "highlight": false },
@@ -87,70 +57,41 @@
           { "text": "13", "startSec": 1.3, "endSec": 1.8, "highlight": true }
         ],
         [
-          { "text": "KHÔNG", "startSec": 1.8, "endSec": 2.3, "highlight": false },
-          { "text": "PHẢI", "startSec": 2.3, "endSec": 2.8, "highlight": false },
-          { "text": "LỜI", "startSec": 2.8, "endSec": 3.4, "highlight": true },
-          { "text": "NGUYỀN", "startSec": 3.4, "endSec": 4.1, "highlight": true }
+          { "text": "KHÔNG", "startSec": 1.8, "endSec": 2.2, "highlight": false },
+          { "text": "PHẢI", "startSec": 2.2, "endSec": 2.6, "highlight": false },
+          { "text": "LỜI", "startSec": 2.6, "endSec": 3.0, "highlight": true },
+          { "text": "NGUYỀN", "startSec": 3.0, "endSec": 3.4, "highlight": true }
         ]
       ]
     },
     {
-      "startSec": 4.3,
-      "endSec": 8.5,
+      "startSec": 3.6,
+      "endSec": 6.9,
       "lines": [
         [
-          { "text": "VUA", "startSec": 4.3, "endSec": 4.9, "highlight": false },
-          { "text": "PHÁP", "startSec": 4.9, "endSec": 5.5, "highlight": false },
-          { "text": "BẮT", "startSec": 5.5, "endSec": 6.1, "highlight": true },
-          { "text": "HIỆP", "startSec": 6.1, "endSec": 6.7, "highlight": false },
-          { "text": "SĨ", "startSec": 6.7, "endSec": 7.2, "highlight": false }
+          { "text": "VUA", "startSec": 3.6, "endSec": 4.1, "highlight": false },
+          { "text": "PHÁP", "startSec": 4.1, "endSec": 4.6, "highlight": false },
+          { "text": "BẮT", "startSec": 4.6, "endSec": 5.1, "highlight": true },
+          { "text": "HIỆP", "startSec": 5.1, "endSec": 5.6, "highlight": false },
+          { "text": "SĨ", "startSec": 5.6, "endSec": 6.0, "highlight": false }
         ],
         [
-          { "text": "ĐỂ", "startSec": 7.2, "endSec": 7.7, "highlight": true },
-          { "text": "XÙ", "startSec": 7.7, "endSec": 8.1, "highlight": true },
-          { "text": "NỢ", "startSec": 8.1, "endSec": 8.5, "highlight": true }
+          { "text": "ĐỂ", "startSec": 6.0, "endSec": 6.3, "highlight": true },
+          { "text": "XÙ", "startSec": 6.3, "endSec": 6.6, "highlight": true },
+          { "text": "NỢ", "startSec": 6.6, "endSec": 6.9, "highlight": true }
         ]
       ]
     },
     {
-      "startSec": 8.7,
-      "endSec": 12.7,
+      "startSec": 7.1,
+      "endSec": 9.9,
       "lines": [
         [
-          { "text": "CHẤN", "startSec": 8.7, "endSec": 9.5, "highlight": true },
-          { "text": "ĐỘNG", "startSec": 9.5, "endSec": 10.3, "highlight": true },
-          { "text": "TOÀN", "startSec": 10.3, "endSec": 11.1, "highlight": false },
-          { "text": "PARIS", "startSec": 11.1, "endSec": 11.9, "highlight": true },
-          { "text": "1307", "startSec": 11.9, "endSec": 12.7, "highlight": true }
-        ]
-      ]
-    },
-    {
-      "startSec": 12.9,
-      "endSec": 17.1,
-      "lines": [
-        [
-          { "text": "NHÀ", "startSec": 12.9, "endSec": 13.5, "highlight": false },
-          { "text": "ĐẦU", "startSec": 13.5, "endSec": 14.1, "highlight": false },
-          { "text": "CƠ", "startSec": 14.1, "endSec": 14.7, "highlight": false },
-          { "text": "THAO", "startSec": 14.7, "endSec": 15.4, "highlight": true },
-          { "text": "TÚNG", "startSec": 15.4, "endSec": 16.2, "highlight": true },
-          { "text": "PHỐ", "startSec": 16.2, "endSec": 16.6, "highlight": false },
-          { "text": "WALL", "startSec": 16.6, "endSec": 17.1, "highlight": true }
-        ]
-      ]
-    },
-    {
-      "startSec": 17.3,
-      "endSec": 20.9,
-      "lines": [
-        [
-          { "text": "DO", "startSec": 17.3, "endSec": 17.9, "highlight": false },
-          { "text": "TIỂU", "startSec": 17.9, "endSec": 18.6, "highlight": true },
-          { "text": "THUYẾT", "startSec": 18.6, "endSec": 19.3, "highlight": true },
-          { "text": "VÀ", "startSec": 19.3, "endSec": 19.8, "highlight": false },
-          { "text": "PHIM", "startSec": 19.8, "endSec": 20.4, "highlight": true },
-          { "text": "ẢNH", "startSec": 20.4, "endSec": 20.9, "highlight": true }
+          { "text": "CHẤN", "startSec": 7.1, "endSec": 7.7, "highlight": true },
+          { "text": "ĐỘNG", "startSec": 7.7, "endSec": 8.3, "highlight": true },
+          { "text": "TOÀN", "startSec": 8.3, "endSec": 8.9, "highlight": false },
+          { "text": "PARIS", "startSec": 8.9, "endSec": 9.4, "highlight": true },
+          { "text": "1307", "startSec": 9.4, "endSec": 9.9, "highlight": true }
         ]
       ]
     }
