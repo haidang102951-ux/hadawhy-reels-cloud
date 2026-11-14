@@ -14,6 +14,7 @@ venv/
 # Outputs & Temp
 cloud_out/
 temp_render/
+remotion_reels/public/harvested/
 *.mp4
 *.mov
 *.avi

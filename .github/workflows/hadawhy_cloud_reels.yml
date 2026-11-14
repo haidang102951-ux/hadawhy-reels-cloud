@@ -4,16 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "preview (30s xem 5 anh truoc) | render (xuat MP4 60fps) | revise (sua theo gop y)"
+        description: "auto (1-click kich ban moi + anh + render MP4) | create (tao kich ban + preview) | preview | render | revise"
         required: true
-        default: "preview"
+        default: "auto"
         type: choice
         options:
+          - auto
+          - create
           - preview
           - render
           - revise
       feedback:
-        description: "Gop y sua canh (chi dung khi chon mode = revise)"
+        description: "Nhap chu de/yeu cau video moi (auto/create) hoac gop y sua (revise)"
         required: false
         default: ""
         type: string
@@ -45,7 +47,7 @@ jobs:
       - name: Install Node & Python dependencies
         run: |
           cd remotion_reels && npm install
-          python -m pip install --upgrade pip google-genai edge-tts
+          python -m pip install --upgrade pip google-genai edge-tts "rembg[cpu]" pillow requests
 
       - name: Run Cloud Reels Pipeline
         env:

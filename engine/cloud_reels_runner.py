@@ -11,15 +11,19 @@ Optionally posts outputs to Telegram when TELEGRAM_BOT_TOKEN & TELEGRAM_CHAT_ID 
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
+import shutil
 import subprocess
 import sys
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 REMOTION_DIR = BASE_DIR / "remotion_reels"
+HARVESTED_DIR = REMOTION_DIR / "public" / "harvested"
 PLAN_PATH = REMOTION_DIR / "src" / "scene_plan.json"
 OUT_DIR = BASE_DIR / "cloud_out"
 
@@ -77,6 +81,150 @@ def send_telegram_video(video_path: Path, caption: str) -> None:
         print(f"[TELEGRAM] Sent video {video_path.name}: {resp.status}")
 
 
+def _fetch_wikimedia_image(query: str) -> bytes | None:
+    import requests  # type: ignore
+
+    headers = {"User-Agent": "HaDaWhyCloudBot/1.0 (https://github.com/haidang102951-ux/hadawhy-reels-cloud)"}
+    params = {
+        "action": "query",
+        "generator": "search",
+        "gsrnamespace": "6",
+        "gsrsearch": query,
+        "gsrlimit": "6",
+        "prop": "imageinfo",
+        "iiprop": "url|mime",
+        "iiurlwidth": "1024",
+        "format": "json",
+    }
+    try:
+        r = requests.get("https://commons.wikimedia.org/w/api.php", params=params, headers=headers, timeout=20)
+        r.raise_for_status()
+        pages = r.json().get("query", {}).get("pages", {})
+        for page in pages.values():
+            info = (page.get("imageinfo") or [{}])[0]
+            mime = info.get("mime", "")
+            img_url = info.get("thumburl") or info.get("url")
+            if img_url and mime in ("image/jpeg", "image/png", "image/webp"):
+                img_resp = requests.get(img_url, headers=headers, timeout=25)
+                if img_resp.ok and len(img_resp.content) > 5000:
+                    return img_resp.content
+    except Exception as exc:
+        print(f"[HARVEST] Wikimedia fallback for '{query}': {exc}")
+    return None
+
+
+def _fetch_pollinations_image(query: str) -> bytes | None:
+    import requests  # type: ignore
+
+    prompt_enc = urllib.parse.quote(f"{query}, clean studio lighting, centered isolated subject, photorealistic, high detail")
+    url = f"https://image.pollinations.ai/prompt/{prompt_enc}?width=1024&height=1024&nologo=true"
+    try:
+        r = requests.get(url, timeout=45)
+        if r.ok and len(r.content) > 5000:
+            return r.content
+    except Exception as exc:
+        print(f"[HARVEST] Pollinations error for '{query}': {exc}")
+    return None
+
+
+def harvest_assets(plan: dict, clean: bool = False) -> None:
+    specs = plan.get("assetSpecs", [])
+    if clean and HARVESTED_DIR.exists():
+        shutil.rmtree(HARVESTED_DIR, ignore_errors=True)
+    HARVESTED_DIR.mkdir(parents=True, exist_ok=True)
+    if not specs:
+        return
+
+    from PIL import Image  # type: ignore
+    try:
+        from rembg import remove  # type: ignore
+    except Exception:
+        remove = None
+
+    for item in specs:
+        filename = Path(str(item.get("filename", "prop.png"))).name
+        if not filename.lower().endswith(".png"):
+            filename = f"{Path(filename).stem}.png"
+        out_path = HARVESTED_DIR / filename
+        if out_path.exists() and not clean:
+            continue
+        query = str(item.get("query", filename)).strip()
+        remove_bg = bool(item.get("removeBg", True))
+        print(f"[HARVEST] Fetching '{query}' -> {out_path.name} (removeBg={remove_bg})")
+
+        raw_bytes = _fetch_wikimedia_image(query) or _fetch_pollinations_image(query)
+        if not raw_bytes:
+            # Generate clean transparent placeholder so Remotion never crashes
+            Image.new("RGBA", (512, 512), (66, 178, 242, 40)).save(out_path, "PNG")
+            continue
+
+        if remove_bg and remove is not None:
+            try:
+                cut_bytes = remove(raw_bytes)
+                img = Image.open(io.BytesIO(cut_bytes)).convert("RGBA")
+                bbox = img.getbbox()
+                if bbox:
+                    img = img.crop(bbox)
+                img.save(out_path, "PNG")
+                continue
+            except Exception as exc:
+                print(f"[HARVEST] rembg failed for {filename}: {exc}")
+
+        Image.open(io.BytesIO(raw_bytes)).convert("RGBA").save(out_path, "PNG")
+
+
+def mode_create(topic_prompt: str) -> None:
+    if not topic_prompt.strip():
+        raise RuntimeError("Topic prompt (--feedback) is required for --mode create/auto")
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is required for --mode create/auto")
+    from google import genai  # type: ignore
+
+    client = genai.Client(api_key=api_key)
+    prompt = f"""Bạn là Tổng Đạo Diễn video ngắn dọc 9:16 (60fps) kênh HaDa Why (@hadawhy).
+Hãy sáng tác trọn bộ JSON scene_plan cho yêu cầu sau của Người Chỉ Huy:
+"{topic_prompt}"
+
+QUY TẮC BẮT BUỘC:
+1. Chỉ trả về JSON hợp lệ (không markdown ```json).
+2. Cấu trúc JSON:
+{{
+  "projectTitle": "HaDaWhy_<TenKhongDau>",
+  "fps": 60,
+  "mistIntensity": 0.11,
+  "assetSpecs": [
+    {{ "filename": "ten_anh_1.png", "query": "tu khoa tieng Anh chuan xac de tim anh that tren Wikimedia", "removeBg": true }}
+  ],
+  "scenes": [ ... ],
+  "captions": [
+    {{
+      "startSec": 0.1,
+      "endSec": 3.4,
+      "lines": [
+        [ {{ "text": "TU", "startSec": 0.1, "endSec": 0.5, "highlight": false }}, ... ]
+      ]
+    }}
+  ]
+}}
+3. Mỗi scene trong "scenes" chỉ dùng 1 trong 5 layout sau:
+   - "hero_prop": {{ id, startSec, endSec, layout:"hero_prop", eyebrow, heroText, heroColor, subNote, yearWatermark, primaryAsset:"harvested/...", primaryLabel }}
+   - "compare_two": {{ id, startSec, endSec, layout:"compare_two", eyebrow, heroText, heroColor, yearWatermark, leftAsset:"harvested/...", leftLabel, leftLabelColor, rightAsset:"harvested/...", rightLabel, rightLabelColor, centerAsset:"harvested/..." }}
+   - "sat_map": {{ id, startSec, endSec, layout:"sat_map", eyebrow, heroText, heroColor, mapRegion: ("fra"|"uk"|"usa"|"world"), mapCaption }}
+   - "two_tier": {{ id, startSec, endSec, layout:"two_tier", eyebrow, heroText, heroColor, topLeftAsset:"harvested/...", topLeftLabel, topRightAsset:"harvested/...", bottomAsset:"harvested/...", bottomTitle, bottomHighlight }}
+   - "split_duo": {{ id, startSec, endSec, layout:"split_duo", eyebrow, heroText, heroColor, leftAsset:"harvested/...", leftLabel, rightAsset:"harvested/...", rightLabel, ctaText }}
+4. MỌI đường dẫn "harvested/<file>.png" dùng trong scenes PHẢI có tên file tương ứng trong "assetSpecs".
+5. Thời lượng tổng (endSec của scene cuối) phải khớp đúng yêu cầu (mặc định 15-30s nếu không nói rõ).
+6. Lời thoại tiếng Việt súc tích, bóc trần bản chất, chia từng từ trong captions khớp nhịp thời gian."""
+
+    resp = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    raw = (resp.text or "").strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    parsed = json.loads(raw)
+    PLAN_PATH.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"[CREATE] Generated {PLAN_PATH} for topic: {topic_prompt}")
+    harvest_assets(parsed, clean=True)
+
+
 def mode_revise(feedback: str) -> None:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
@@ -100,6 +248,7 @@ def mode_revise(feedback: str) -> None:
 
 def mode_preview() -> list[Path]:
     plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
+    harvest_assets(plan, clean=False)
     fps = int(plan.get("fps", 60))
     preview_dir = OUT_DIR / "preview"
     preview_dir.mkdir(parents=True, exist_ok=True)
@@ -242,6 +391,7 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
 
 def mode_render() -> Path:
     plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
+    harvest_assets(plan, clean=False)
     title = plan.get("projectTitle", "HaDaWhy_Cloud_Video")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     raw_mp4 = OUT_DIR / f"{title}_raw.mp4"
@@ -292,11 +442,17 @@ def mode_render() -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["preview", "render", "revise"], required=True)
+    parser.add_argument("--mode", choices=["auto", "create", "preview", "render", "revise"], required=True)
     parser.add_argument("--feedback", default="")
     args = parser.parse_args()
 
-    if args.mode == "revise":
+    if args.mode == "auto":
+        mode_create(args.feedback)
+        mode_render()
+    elif args.mode == "create":
+        mode_create(args.feedback)
+        mode_preview()
+    elif args.mode == "revise":
         mode_revise(args.feedback)
         mode_preview()
     elif args.mode == "preview":
