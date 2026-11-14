@@ -173,15 +173,23 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
         Image.open(io.BytesIO(raw_bytes)).convert("RGBA").save(out_path, "PNG")
 
 
+def _extract_json_object(text: str) -> dict:
+    raw = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        raw = raw[start : end + 1]
+    return json.loads(raw)
+
+
 def _call_gemini_json(prompt: str) -> dict:
     import requests  # type: ignore
 
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    gh_token = os.getenv("GITHUB_TOKEN", "").strip()
     last_err = None
 
     if api_key:
-        for model in ("gemini-3.8-flash", "gemini-flash-latest"):
+        for model in ("gemini-3.8-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
@@ -197,39 +205,59 @@ def _call_gemini_json(prompt: str) -> dict:
                 r.raise_for_status()
                 data = r.json()
                 text = data["candidates"][0]["content"]["parts"][0]["text"]
-                raw = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-                return json.loads(raw)
+                return _extract_json_object(text)
             except Exception as exc:
                 print(f"[GEMINI] {model} error: {exc}")
                 last_err = exc
 
-    if gh_token:
-        for gh_model in ("openai/gpt-4o-mini", "openai/gpt-4o"):
-            try:
-                print(f"[GITHUB_MODELS] Falling back to {gh_model}...")
-                r = requests.post(
-                    "https://models.github.ai/inference/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {gh_token}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": gh_model,
-                        "messages": [{"role": "user", "content": prompt}],
-                        "response_format": {"type": "json_object"},
-                        "temperature": 0.4,
-                    },
-                    timeout=60,
-                )
-                r.raise_for_status()
-                text = r.json()["choices"][0]["message"]["content"]
-                raw = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-                return json.loads(raw)
-            except Exception as exc:
-                print(f"[GITHUB_MODELS] {gh_model} error: {exc}")
-                last_err = exc
+    for pl_model in ("openai", "mistral"):
+        try:
+            print(f"[POLLINATIONS] Falling back to free model '{pl_model}'...")
+            r = requests.post(
+                "https://text.pollinations.ai/openai",
+                headers={"Content-Type": "application/json"},
+                json={
+                    "model": pl_model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.4,
+                },
+                timeout=60,
+            )
+            r.raise_for_status()
+            text = r.json()["choices"][0]["message"]["content"]
+            return _extract_json_object(text)
+        except Exception as exc:
+            print(f"[POLLINATIONS] {pl_model} error: {exc}")
+            last_err = exc
 
-    raise RuntimeError(f"All LLM providers (Gemini + GitHub Models) failed: {last_err}")
+    raise RuntimeError(f"All LLM providers (Gemini + Pollinations) failed: {last_err}")
+
+
+def _build_captions_from_scenes(plan: dict) -> dict:
+    """Auto-generate word-level captions from each scene's narration if captions are omitted."""
+    if plan.get("captions"):
+        return plan
+    captions = []
+    for scene in plan.get("scenes", []):
+        narration = str(scene.get("narration", "")).strip()
+        if not narration:
+            continue
+        words = [w for w in narration.split() if w]
+        if not words:
+            continue
+        s0 = float(scene.get("startSec", 0)) + 0.1
+        s1 = max(s0 + 0.5, float(scene.get("endSec", s0 + 3.0)) - 0.1)
+        step = (s1 - s0) / len(words)
+        tokens = []
+        for i, w in enumerate(words):
+            t0 = round(s0 + i * step, 2)
+            t1 = round(s0 + (i + 1) * step, 2)
+            tokens.append({"text": w.upper(), "startSec": t0, "endSec": t1, "highlight": (i % 3 == 1)})
+        mid = max(1, (len(tokens) + 1) // 2)
+        lines = [tokens[:mid]] + ([tokens[mid:]] if tokens[mid:] else [])
+        captions.append({"startSec": round(s0, 2), "endSec": round(s1, 2), "lines": lines})
+    plan["captions"] = captions
+    return plan
 
 
 def mode_create(topic_prompt: str) -> None:
@@ -237,41 +265,44 @@ def mode_create(topic_prompt: str) -> None:
         raise RuntimeError("Topic prompt (--feedback) is required for --mode create/auto")
 
     prompt = f"""Bạn là Tổng Đạo Diễn video ngắn dọc 9:16 (60fps) kênh HaDa Why (@hadawhy).
-Hãy sáng tác trọn bộ JSON scene_plan cho yêu cầu sau của Người Chỉ Huy:
-"{topic_prompt}"
+Hãy sáng tác JSON scene_plan ngắn gọn cho yêu cầu: "{topic_prompt}"
 
-QUY TẮC BẮT BUỘC:
-1. Chỉ trả về JSON hợp lệ (không markdown ```json).
-2. Cấu trúc JSON:
+CHỈ trả về JSON hợp lệ (không markdown ```json):
 {{
   "projectTitle": "HaDaWhy_<TenKhongDau>",
   "fps": 60,
   "mistIntensity": 0.11,
   "assetSpecs": [
-    {{ "filename": "ten_anh_1.png", "query": "tu khoa tieng Anh chuan xac de tim anh that tren Wikimedia", "removeBg": true }}
+    {{ "filename": "ten_anh_1.png", "query": "tu khoa tieng Anh chuan de tim anh that", "removeBg": true }}
   ],
-  "scenes": [ ... ],
-  "captions": [
+  "scenes": [
     {{
-      "startSec": 0.1,
-      "endSec": 3.4,
-      "lines": [
-        [ {{ "text": "TU", "startSec": 0.1, "endSec": 0.5, "highlight": false }}, ... ]
-      ]
+      "id": "scene_1",
+      "startSec": 0,
+      "endSec": 3.5,
+      "layout": "hero_prop",
+      "eyebrow": "TIEU DE PHU",
+      "heroText": "CHU TO",
+      "heroColor": "#ff3b3b",
+      "subNote": "GHI CHU",
+      "yearWatermark": "2026",
+      "primaryAsset": "harvested/ten_anh_1.png",
+      "primaryLabel": "",
+      "narration": "Cau thoai tieng Viet ngan gon 8-12 tu doc trong canh nay."
     }}
   ]
 }}
-3. Mỗi scene trong "scenes" chỉ dùng 1 trong 5 layout sau:
-   - "hero_prop": {{ id, startSec, endSec, layout:"hero_prop", eyebrow, heroText, heroColor, subNote, yearWatermark, primaryAsset:"harvested/...", primaryLabel }}
-   - "compare_two": {{ id, startSec, endSec, layout:"compare_two", eyebrow, heroText, heroColor, yearWatermark, leftAsset:"harvested/...", leftLabel, leftLabelColor, rightAsset:"harvested/...", rightLabel, rightLabelColor, centerAsset:"harvested/..." }}
-   - "sat_map": {{ id, startSec, endSec, layout:"sat_map", eyebrow, heroText, heroColor, mapRegion: ("fra"|"uk"|"usa"|"world"), mapCaption }}
-   - "two_tier": {{ id, startSec, endSec, layout:"two_tier", eyebrow, heroText, heroColor, topLeftAsset:"harvested/...", topLeftLabel, topRightAsset:"harvested/...", bottomAsset:"harvested/...", bottomTitle, bottomHighlight }}
-   - "split_duo": {{ id, startSec, endSec, layout:"split_duo", eyebrow, heroText, heroColor, leftAsset:"harvested/...", leftLabel, rightAsset:"harvested/...", rightLabel, ctaText }}
-4. MỌI đường dẫn "harvested/<file>.png" dùng trong scenes PHẢI có tên file tương ứng trong "assetSpecs".
-5. Thời lượng tổng (endSec của scene cuối) phải khớp đúng yêu cầu (mặc định 15-30s nếu không nói rõ).
-6. Lời thoại tiếng Việt súc tích, bóc trần bản chất, chia từng từ trong captions khớp nhịp thời gian."""
 
-    parsed = _call_gemini_json(prompt)
+5 layout hợp lệ:
+- "hero_prop": primaryAsset, primaryLabel, subNote, yearWatermark
+- "compare_two": leftAsset, leftLabel, leftLabelColor, rightAsset, rightLabel, rightLabelColor, centerAsset, yearWatermark
+- "sat_map": mapRegion ("fra"|"uk"|"usa"|"world"), mapCaption
+- "two_tier": topLeftAsset, topLeftLabel, topRightAsset, bottomAsset, bottomTitle, bottomHighlight
+- "split_duo": leftAsset, leftLabel, rightAsset, rightLabel, ctaText
+
+Mọi file "harvested/<name>.png" dùng trong scenes phải có trong assetSpecs."""
+
+    parsed = _build_captions_from_scenes(_call_gemini_json(prompt))
     PLAN_PATH.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[CREATE] Generated {PLAN_PATH} for topic: {topic_prompt}")
     harvest_assets(parsed, clean=True)
