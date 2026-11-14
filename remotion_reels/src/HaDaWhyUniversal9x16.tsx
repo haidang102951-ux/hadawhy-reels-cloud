@@ -94,9 +94,16 @@ const ImpactHook: React.FC<{
 }> = ({ eyebrow, heroText, heroColor = "#ff3b3b", subNote }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const pop = spring({ frame, fps, config: { damping: 13, stiffness: 180 } });
-  const scale = interpolate(pop, [0, 1], [1.22, 1]);
-  const opacity = interpolate(frame, [0, 8], [0, 1], { extrapolateRight: "clamp" });
+  const slam = spring({ frame, fps, config: { damping: 11, stiffness: 250 } });
+  const scale = interpolate(slam, [0, 1], [1.85, 1]);
+  const opacity = interpolate(frame, [0, 5], [0, 1], { extrapolateRight: "clamp" });
+  const shakeDecay = interpolate(frame, [0, 12], [1, 0], { extrapolateRight: "clamp" });
+  const shakeX = Math.sin(frame * 2.7) * 7 * shakeDecay;
+  const shakeY = Math.cos(frame * 3.1) * 5 * shakeDecay;
+  const sweepPos = interpolate(frame, [10, 48], [-120, 220], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
 
   return (
     <div
@@ -108,7 +115,7 @@ const ImpactHook: React.FC<{
         textAlign: "center",
         zIndex: 25,
         opacity,
-        transform: `scale(${scale})`,
+        transform: `translate(${shakeX}px, ${shakeY}px) scale(${scale})`,
       }}
     >
       <div
@@ -125,6 +132,8 @@ const ImpactHook: React.FC<{
       </div>
       <div
         style={{
+          position: "relative",
+          display: "inline-block",
           fontFamily: FONT_HEADING,
           fontSize: heroText.length > 10 ? 78 : 110,
           fontWeight: 900,
@@ -137,6 +146,18 @@ const ImpactHook: React.FC<{
         }}
       >
         {heroText}
+        <span
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: `linear-gradient(110deg, transparent ${sweepPos - 25}%, rgba(255,255,255,0.65) ${sweepPos}%, transparent ${sweepPos + 25}%)`,
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            pointerEvents: "none",
+          }}
+        >
+          {heroText}
+        </span>
       </div>
       {subNote ? (
         <div
@@ -185,8 +206,10 @@ const WatermarkYear: React.FC<{ text?: string }> = ({ text }) => {
 const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const enter = spring({ frame: frame - 4, fps, config: { damping: 14, stiffness: 120 } });
-  const floatY = Math.sin(frame * 0.05) * 10;
+  const enter = spring({ frame: frame - 3, fps, config: { damping: 12, stiffness: 150 } });
+  const floatY = Math.sin(frame * 0.065) * 14;
+  const tiltDeg = Math.sin(frame * 0.04) * 2.2;
+  const shadowScale = interpolate(floatY, [-14, 14], [0.85, 1.06]);
 
   return (
     <AbsoluteFill>
@@ -207,7 +230,7 @@ const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            transform: `translateY(${floatY}px) scale(${interpolate(enter, [0, 1], [0.88, 1])})`,
+            transform: `perspective(1200px) translateY(${floatY}px) rotateZ(${tiltDeg}deg) scale(${interpolate(enter, [0, 1], [0.78, 1])})`,
             opacity: enter,
             zIndex: 12,
           }}
@@ -218,7 +241,18 @@ const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
               height: 680,
               maxWidth: 840,
               objectFit: "contain",
-              filter: "drop-shadow(0 30px 44px rgba(0,0,0,0.92))",
+              filter: "drop-shadow(0 0 18px rgba(66,178,242,0.32)) drop-shadow(0 30px 44px rgba(0,0,0,0.92))",
+            }}
+          />
+          <div
+            style={{
+              width: 440,
+              height: 34,
+              marginTop: -12,
+              borderRadius: "50%",
+              background: "radial-gradient(ellipse at center, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 72%)",
+              transform: `scale(${shadowScale})`,
+              pointerEvents: "none",
             }}
           />
           {scene.primaryLabel ? (
@@ -637,6 +671,36 @@ const SceneSplitDuo: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
   );
 };
 
+const SceneMotionGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const frame = useCurrentFrame();
+  const { fps, durationInFrames } = useVideoConfig();
+  const punch = spring({ frame, fps, config: { damping: 14, stiffness: 220 } });
+  const camScale = interpolate(punch, [0, 1], [1.08, 1]);
+  const flashOpacity = interpolate(frame, [0, 7], [0.24, 0], { extrapolateRight: "clamp" });
+  const exitOpacity = interpolate(
+    frame,
+    [Math.max(0, durationInFrames - 5), durationInFrames],
+    [1, 0.85],
+    { extrapolateLeft: "clamp", extrapolateRight: "clamp" }
+  );
+
+  return (
+    <AbsoluteFill style={{ transform: `scale(${camScale})`, opacity: exitOpacity }}>
+      {children}
+      {flashOpacity > 0.01 ? (
+        <AbsoluteFill
+          style={{
+            background: "radial-gradient(circle at 50% 45%, rgba(66,178,242,0.55) 0%, rgba(255,255,255,0.22) 35%, transparent 75%)",
+            opacity: flashOpacity,
+            pointerEvents: "none",
+            zIndex: 40,
+          }}
+        />
+      ) : null}
+    </AbsoluteFill>
+  );
+};
+
 export const HaDaWhyUniversal9x16: React.FC<HaDaWhyUniversal9x16Props> = ({
   plan = defaultPlan as unknown as UniversalScenePlan,
 }) => {
@@ -653,11 +717,13 @@ export const HaDaWhyUniversal9x16: React.FC<HaDaWhyUniversal9x16Props> = ({
         const durationInFrames = Math.max(1, Math.round((scene.endSec - scene.startSec) * fps));
         return (
           <Sequence key={scene.id} from={from} durationInFrames={durationInFrames}>
-            {scene.layout === "hero_prop" && <SceneHeroProp scene={scene} />}
-            {scene.layout === "compare_two" && <SceneCompareTwo scene={scene} />}
-            {scene.layout === "sat_map" && <SceneSatMap scene={scene} />}
-            {scene.layout === "two_tier" && <SceneTwoTier scene={scene} />}
-            {scene.layout === "split_duo" && <SceneSplitDuo scene={scene} />}
+            <SceneMotionGate>
+              {scene.layout === "hero_prop" && <SceneHeroProp scene={scene} />}
+              {scene.layout === "compare_two" && <SceneCompareTwo scene={scene} />}
+              {scene.layout === "sat_map" && <SceneSatMap scene={scene} />}
+              {scene.layout === "two_tier" && <SceneTwoTier scene={scene} />}
+              {scene.layout === "split_duo" && <SceneSplitDuo scene={scene} />}
+            </SceneMotionGate>
           </Sequence>
         );
       })}

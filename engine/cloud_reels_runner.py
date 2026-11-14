@@ -129,10 +129,122 @@ def mode_preview() -> list[Path]:
     return outputs
 
 
+def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
+    """Build Vietnamese voiceover (edge-tts) + Text Hook SFX + Ducked BGM at -14.0 LUFS."""
+    scenes = plan.get("scenes", [])
+    captions = plan.get("captions", [])
+    total_dur = max((float(s.get("endSec", 0)) for s in scenes), default=10.0)
+    if total_dur <= 0:
+        return None
+
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    sfx_dir = REMOTION_DIR / "public" / "sfx"
+    sfx_cycle = [
+        sfx_dir / "bass_hit.mp3",
+        sfx_dir / "zoom_hit.mp3",
+        sfx_dir / "whoosh_big.mp3",
+    ]
+    bgm_path = BASE_DIR / "assets" / "music" / "hadawhy_mystery_bgm.mp3"
+
+    # 1. Generate per-phrase Vietnamese voiceover clips via edge-tts
+    vo_entries: list[tuple[Path, int]] = []
+    for idx, phrase in enumerate(captions):
+        words = []
+        for line in phrase.get("lines", []):
+            for tok in line:
+                t = str(tok.get("text", "")).strip()
+                if t:
+                    words.append(t)
+        text = " ".join(words).strip()
+        if not text:
+            continue
+        vo_mp3 = temp_dir / f"vo_{idx:02d}.mp3"
+        try:
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "edge_tts",
+                    "--voice",
+                    "vi-VN-NamMinhNeural",
+                    "--rate=+12%",
+                    "--text",
+                    text,
+                    "--write-media",
+                    str(vo_mp3),
+                ],
+                check=True,
+            )
+            if vo_mp3.exists() and vo_mp3.stat().st_size > 0:
+                delay_ms = max(0, int(round(float(phrase.get("startSec", 0)) * 1000)))
+                vo_entries.append((vo_mp3, delay_ms))
+        except Exception as exc:
+            print(f"[WARN] edge-tts failed for phrase {idx}: {exc}")
+
+    # 2. Collect Text Hook SFX aligned to each scene's startSec
+    sfx_entries: list[tuple[Path, int]] = []
+    for idx, scene in enumerate(scenes):
+        sfx_file = sfx_cycle[idx % len(sfx_cycle)]
+        if sfx_file.exists():
+            delay_ms = max(0, int(round(float(scene.get("startSec", 0)) * 1000)))
+            sfx_entries.append((sfx_file, delay_ms))
+
+    # 3. Mix Voiceover + SFX + Ducked BGM -> -14.0 LUFS WAV
+    inputs: list[str] = []
+    filters: list[str] = []
+    idx_counter = 0
+
+    # Base silence track to lock exact duration
+    inputs.extend(["-f", "lavfi", "-t", f"{total_dur:.3f}", "-i", "anullsrc=r=44100:cl=stereo"])
+    base_idx = idx_counter
+    idx_counter += 1
+
+    vo_labels: list[str] = []
+    for vo_path, delay_ms in vo_entries:
+        inputs.extend(["-i", str(vo_path)])
+        lbl = f"vo{idx_counter}"
+        filters.append(f"[{idx_counter}:a]adelay={delay_ms}|{delay_ms},volume=1.35[{lbl}]")
+        vo_labels.append(f"[{lbl}]")
+        idx_counter += 1
+
+    sfx_labels: list[str] = []
+    for sfx_path, delay_ms in sfx_entries:
+        inputs.extend(["-i", str(sfx_path)])
+        lbl = f"sfx{idx_counter}"
+        filters.append(f"[{idx_counter}:a]adelay={delay_ms}|{delay_ms},volume=0.55[{lbl}]")
+        sfx_labels.append(f"[{lbl}]")
+        idx_counter += 1
+
+    bgm_label: str | None = None
+    if bgm_path.exists():
+        inputs.extend(["-stream_loop", "-1", "-t", f"{total_dur:.3f}", "-i", str(bgm_path)])
+        filters.append(f"[{idx_counter}:a]volume=0.14[bgm_bed]")
+        bgm_label = "[bgm_bed]"
+        idx_counter += 1
+
+    mix_inputs = [f"[{base_idx}:a]"] + vo_labels + sfx_labels + ([bgm_label] if bgm_label else [])
+    if len(mix_inputs) == 1:
+        return None
+
+    out_wav = temp_dir / "master_mix_14lufs.wav"
+    filter_complex = (
+        ";".join(filters + [
+            f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:duration=first:dropout_transition=0:normalize=0,"
+            f"loudnorm=I=-14:TP=-1.5:LRA=11[aout]"
+        ])
+    )
+    subprocess.run(
+        ["ffmpeg", "-y", *inputs, "-filter_complex", filter_complex, "-map", "[aout]", "-ar", "44100", "-ac", "2", str(out_wav)],
+        check=True,
+    )
+    return out_wav
+
+
 def mode_render() -> Path:
     plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
     title = plan.get("projectTitle", "HaDaWhy_Cloud_Video")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    raw_mp4 = OUT_DIR / f"{title}_raw.mp4"
     out_mp4 = OUT_DIR / f"{title}.mp4"
     concurrency = str(max(1, min(4, os.cpu_count() or 2)))
     run_cmd(
@@ -142,14 +254,38 @@ def mode_render() -> Path:
             "render",
             "src/index.ts",
             "HaDaWhyUniversal9x16",
-            str(out_mp4),
+            str(raw_mp4),
             "--codec=h264",
             f"--concurrency={concurrency}",
             "--gl=angle",
         ],
         cwd=REMOTION_DIR,
     )
-    send_telegram_video(out_mp4, f"Render hoàn tất: {title}")
+    audio_wav = build_audio_track(plan, OUT_DIR / "audio_tmp")
+    if audio_wav and audio_wav.exists():
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(raw_mp4),
+                "-i",
+                str(audio_wav),
+                "-c:v",
+                "copy",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+                "-shortest",
+                str(out_mp4),
+            ],
+            check=True,
+        )
+        raw_mp4.unlink(missing_ok=True)
+    else:
+        raw_mp4.replace(out_mp4)
+    send_telegram_video(out_mp4, f"Render hoàn tất (Voice + SFX + BGM + Motion): {title}")
     print(f"[RENDER] Output MP4: {out_mp4}")
     return out_mp4
 
