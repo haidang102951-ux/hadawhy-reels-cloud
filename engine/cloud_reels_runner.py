@@ -134,6 +134,7 @@ def mode_render() -> Path:
     title = plan.get("projectTitle", "HaDaWhy_Cloud_Video")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_mp4 = OUT_DIR / f"{title}.mp4"
+    concurrency = str(max(1, min(4, os.cpu_count() or 2)))
     run_cmd(
         [
             "npx",
@@ -143,7 +144,7 @@ def mode_render() -> Path:
             "HaDaWhyUniversal9x16",
             str(out_mp4),
             "--codec=h264",
-            "--concurrency=4",
+            f"--concurrency={concurrency}",
             "--gl=angle",
         ],
         cwd=REMOTION_DIR,
