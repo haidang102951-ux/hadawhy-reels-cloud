@@ -31,8 +31,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
-          cache-dependency-path: remotion_reels/package-lock.json
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
@@ -46,7 +44,7 @@ jobs:
 
       - name: Install Node & Python dependencies
         run: |
-          cd remotion_reels && npm ci
+          cd remotion_reels && npm install
           python -m pip install --upgrade pip google-genai
 
       - name: Run Cloud Reels Pipeline
