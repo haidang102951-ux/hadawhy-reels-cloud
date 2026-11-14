@@ -174,12 +174,14 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
 
 
 def _extract_json_object(text: str) -> dict:
+    import re
     raw = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     start = raw.find("{")
     end = raw.rfind("}")
     if start != -1 and end != -1 and end > start:
         raw = raw[start : end + 1]
-    return json.loads(raw)
+    raw = re.sub(r",\s*([}\]])", r"\1", raw)
+    return json.loads(raw, strict=False)
 
 
 def _call_gemini_json(prompt: str) -> dict:
@@ -189,7 +191,7 @@ def _call_gemini_json(prompt: str) -> dict:
     last_err = None
 
     if api_key:
-        for model in ("gemini-3.8-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"):
+        for model in ("gemini-3.8-flash", "gemini-flash-latest"):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
@@ -197,7 +199,7 @@ def _call_gemini_json(prompt: str) -> dict:
             }
             try:
                 print(f"[GEMINI] Calling {model}...")
-                r = requests.post(url, json=payload, timeout=45)
+                r = requests.post(url, json=payload, timeout=25)
                 if r.status_code == 404:
                     print(f"[GEMINI] {model} returned 404, trying next model...")
                     last_err = r.text
@@ -210,16 +212,17 @@ def _call_gemini_json(prompt: str) -> dict:
                 print(f"[GEMINI] {model} error: {exc}")
                 last_err = exc
 
-    for pl_model in ("openai", "mistral"):
+    for attempt in range(1, 3):
         try:
-            print(f"[POLLINATIONS] Falling back to free model '{pl_model}'...")
+            print(f"[POLLINATIONS] Calling free model 'openai' (attempt {attempt})...")
             r = requests.post(
                 "https://text.pollinations.ai/openai",
                 headers={"Content-Type": "application/json"},
                 json={
-                    "model": pl_model,
+                    "model": "openai",
                     "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.4,
+                    "response_format": {"type": "json_object"},
+                    "temperature": 0.3,
                 },
                 timeout=60,
             )
@@ -227,7 +230,7 @@ def _call_gemini_json(prompt: str) -> dict:
             text = r.json()["choices"][0]["message"]["content"]
             return _extract_json_object(text)
         except Exception as exc:
-            print(f"[POLLINATIONS] {pl_model} error: {exc}")
+            print(f"[POLLINATIONS] attempt {attempt} error: {exc}")
             last_err = exc
 
     raise RuntimeError(f"All LLM providers (Gemini + Pollinations) failed: {last_err}")
