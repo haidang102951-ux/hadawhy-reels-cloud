@@ -217,7 +217,7 @@ QUY TẮC BẮT BUỘC:
 5. Thời lượng tổng (endSec của scene cuối) phải khớp đúng yêu cầu (mặc định 15-30s nếu không nói rõ).
 6. Lời thoại tiếng Việt súc tích, bóc trần bản chất, chia từng từ trong captions khớp nhịp thời gian."""
 
-    resp = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    resp = client.models.generate_content(model="gemini-3.8-flash", contents=prompt)
     raw = (resp.text or "").strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     parsed = json.loads(raw)
     PLAN_PATH.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -239,7 +239,7 @@ def mode_revise(feedback: str) -> None:
         f"GÓP Ý CẦN SỬA:\n{feedback}\n\n"
         f"SCENE_PLAN HIỆN TẠI:\n{current_plan}"
     )
-    resp = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    resp = client.models.generate_content(model="gemini-3.8-flash", contents=prompt)
     raw = (resp.text or "").strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     parsed = json.loads(raw)
     PLAN_PATH.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
