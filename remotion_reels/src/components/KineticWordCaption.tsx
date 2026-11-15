@@ -205,7 +205,7 @@ export const KineticWordCaption: React.FC<KineticWordCaptionProps> = ({
     <div
       style={{
         position: "absolute",
-        ...(placement === "bottom" ? { bottom: 270 } : { top: 108 }),
+        ...(placement === "bottom" ? { bottom: 215 } : { top: 108 }),
         left: 0,
         right: 0,
         width: 1080,
@@ -257,25 +257,24 @@ export const KineticWordCaption: React.FC<KineticWordCaptionProps> = ({
               extrapolateRight: "clamp",
             });
 
+            const wordColor = word.color || "#FFFFFF";
             return (
               <span
                 key={`w-${lineIdx}-${wIdx}`}
                 style={{
                   display: "inline-block",
                   fontFamily: "BeVietnamProBlack, sans-serif",
-                  fontSize: 46,
+                  fontSize: 48,
                   fontWeight: 900,
-                  lineHeight: 1.08,
+                  lineHeight: 1.1,
                   letterSpacing: "-0.01em",
-                  color: word.color || "#FFFFFF",
+                  color: wordColor,
                   opacity,
                   transform: `translateY(${translateY}px) scale(${scale})`,
-                  // ZERO-BOX: No background rectangle! Pure crisp 3D stroke + deep shadow
-                  WebkitTextStroke: "5px #06080E",
-                  paintOrder: "stroke fill",
+                  // ZERO-BOX: Crisp 8-direction outline + 3D extrusion (never WebkitTextStroke which darkens fills in Chromium)
                   textShadow: isSpeakingNow
-                    ? `0px 6px 0px #06080E, 0px 14px 28px rgba(0,0,0,0.92), 0px 0px 26px ${word.color || "#FFFFFF"}88`
-                    : "0px 6px 0px #06080E, 0px 12px 24px rgba(0,0,0,0.9)",
+                    ? `-2px -2px 0 #05070B, 2px -2px 0 #05070B, -2px 2px 0 #05070B, 2px 2px 0 #05070B, 0 5px 0 #05070B, 0 12px 24px rgba(0,0,0,0.95), 0 0 24px ${wordColor}88`
+                    : "-2px -2px 0 #05070B, 2px -2px 0 #05070B, -2px 2px 0 #05070B, 2px 2px 0 #05070B, 0 5px 0 #05070B, 0 10px 20px rgba(0,0,0,0.9)",
                 }}
               >
                 {word.text}

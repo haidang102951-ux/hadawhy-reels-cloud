@@ -65,6 +65,7 @@ export interface UniversalSceneSpec {
   leftValue?: number;
   rightValue?: number;
   stampText?: string;
+  infoTags?: string[];
 }
 
 export interface UniversalScenePlan {
@@ -169,28 +170,27 @@ const ImpactHook: React.FC<{
       <div
         style={{
           position: "relative",
-          display: "block",
+          display: "inline-block",
           fontFamily: FONT_HEADING,
-          fontSize: safeHero.length > 14 ? 66 : safeHero.length > 9 ? 78 : 98,
+          fontSize: safeHero.length > 14 ? 64 : safeHero.length > 9 ? 76 : 96,
           fontWeight: 900,
-          lineHeight: 1.06,
+          lineHeight: 1.08,
           letterSpacing: "-0.02em",
-          marginTop: 4,
+          marginTop: 6,
           color: heroColor,
-          WebkitTextStroke: "5px #07090E",
-          paintOrder: "stroke fill",
-          textShadow: `0 5px 0 #07090E, 0 14px 28px rgba(0,0,0,0.95), 0 0 32px ${heroColor}55`,
+          textShadow: `-3px -3px 0 #05070B, 3px -3px 0 #05070B, -3px 3px 0 #05070B, 3px 3px 0 #05070B, 0 6px 0 #05070B, 0 16px 32px rgba(0,0,0,0.95), 0 0 34px ${heroColor}66`,
         }}
       >
         {safeHero}
         <span
+          aria-hidden
           style={{
             position: "absolute",
             inset: 0,
-            background: `linear-gradient(110deg, transparent ${sweepPos - 22}%, rgba(255,255,255,0.72) ${sweepPos}%, transparent ${sweepPos + 22}%)`,
+            background: `linear-gradient(110deg, transparent ${sweepPos - 18}%, rgba(255,255,255,0.65) ${sweepPos}%, transparent ${sweepPos + 18}%)`,
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
-            WebkitTextStroke: "0px transparent",
+            textShadow: "none",
             pointerEvents: "none",
           }}
         >
@@ -241,13 +241,65 @@ const WatermarkYear: React.FC<{ text?: string }> = ({ text }) => {
   );
 };
 
+const InfoTagsRow: React.FC<{ tags?: string[]; accent?: string; top?: number }> = ({
+  tags,
+  accent = "#42B2F2",
+  top = 1230,
+}) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  if (!tags || tags.length === 0) return null;
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top,
+        left: 56,
+        right: 56,
+        display: "flex",
+        flexWrap: "wrap",
+        justifyContent: "center",
+        gap: 14,
+        zIndex: 18,
+      }}
+    >
+      {tags.slice(0, 3).map((tag, idx) => {
+        const pop = spring({ frame: frame - (8 + idx * 5), fps, config: { damping: 13, stiffness: 190 } });
+        return (
+          <div
+            key={idx}
+            style={{
+              padding: "10px 22px",
+              borderRadius: 999,
+              background: "rgba(10, 18, 34, 0.78)",
+              border: `2px solid ${accent}88`,
+              boxShadow: `0 0 22px ${accent}33, 0 10px 22px rgba(0,0,0,0.65)`,
+              fontFamily: FONT_BODY,
+              fontSize: 25,
+              fontWeight: 800,
+              color: "#FFFFFF",
+              letterSpacing: 0.8,
+              transform: `translateY(${interpolate(pop, [0, 1], [18, 0])}px) scale(${interpolate(pop, [0, 1], [0.85, 1])})`,
+              opacity: pop,
+            }}
+          >
+            {String(tag).toUpperCase()}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const enter = spring({ frame: frame - 3, fps, config: { damping: 12, stiffness: 150 } });
   const floatY = Math.sin(frame * 0.065) * 14;
-  const tiltDeg = Math.sin(frame * 0.04) * 2.2;
+  const tiltDeg = Math.sin(frame * 0.04) * 2.4;
+  const ringRot = frame * 0.6;
   const shadowScale = interpolate(floatY, [-14, 14], [0.85, 1.06]);
+  const accent = scene.heroColor || "#42B2F2";
 
   return (
     <AbsoluteFill>
@@ -258,11 +310,29 @@ const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
         heroColor={scene.heroColor}
         subNote={scene.subNote}
       />
+      {/* Radial 3D stage spotlight & rotating HUD halo so dark hardware never blends into void */}
+      <div
+        style={{
+          position: "absolute",
+          top: 470,
+          left: "50%",
+          width: 660,
+          height: 660,
+          marginLeft: -330,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${accent}30 0%, rgba(66,178,242,0.12) 42%, transparent 72%)`,
+          border: `2px dashed ${accent}33`,
+          transform: `rotate(${ringRot}deg) scale(${interpolate(enter, [0, 1], [0.6, 1])})`,
+          opacity: enter,
+          pointerEvents: "none",
+          zIndex: 8,
+        }}
+      />
       {scene.primaryAsset ? (
         <div
           style={{
             position: "absolute",
-            top: 470,
+            top: 465,
             left: 0,
             right: 0,
             display: "flex",
@@ -276,10 +346,10 @@ const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
           <Img
             src={staticFile(scene.primaryAsset)}
             style={{
-              height: 680,
-              maxWidth: 840,
+              height: 620,
+              maxWidth: 820,
               objectFit: "contain",
-              filter: "drop-shadow(0 0 18px rgba(66,178,242,0.32)) drop-shadow(0 30px 44px rgba(0,0,0,0.92))",
+              filter: `drop-shadow(0 0 24px ${accent}55) drop-shadow(0 30px 44px rgba(0,0,0,0.92))`,
             }}
           />
           <div
@@ -296,7 +366,7 @@ const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
           {scene.primaryLabel ? (
             <div
               style={{
-                marginTop: 22,
+                marginTop: 18,
                 fontFamily: FONT_BODY,
                 fontSize: 30,
                 fontWeight: 900,
@@ -309,6 +379,7 @@ const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
           ) : null}
         </div>
       ) : null}
+      <InfoTagsRow tags={scene.infoTags} accent={accent} top={1225} />
     </AbsoluteFill>
   );
 };
@@ -740,12 +811,10 @@ const SceneStatOdometer: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) =
         <div
           style={{
             fontFamily: FONT_HEADING,
-            fontSize: 158,
+            fontSize: 148,
             fontWeight: 900,
             color: scene.heroColor || "#FFE600",
-            WebkitTextStroke: "14px #06080E",
-            paintOrder: "stroke fill",
-            filter: `drop-shadow(0 0 36px ${(scene.heroColor || "#FFE600")}88) drop-shadow(0 16px 32px rgba(0,0,0,0.95))`,
+            textShadow: `-4px -4px 0 #05070B, 4px -4px 0 #05070B, -4px 4px 0 #05070B, 4px 4px 0 #05070B, 0 8px 0 #05070B, 0 18px 34px rgba(0,0,0,0.95), 0 0 36px ${(scene.heroColor || "#FFE600")}88`,
             lineHeight: 1,
           }}
         >
@@ -772,15 +841,16 @@ const SceneStatOdometer: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) =
           <Img
             src={staticFile(scene.primaryAsset)}
             style={{
-              marginTop: 32,
-              height: 360,
-              maxWidth: 680,
+              marginTop: 24,
+              height: 340,
+              maxWidth: 660,
               objectFit: "contain",
-              filter: "drop-shadow(0 0 18px rgba(66,178,242,0.35)) drop-shadow(0 24px 36px rgba(0,0,0,0.95))",
+              filter: "drop-shadow(0 0 24px rgba(66,178,242,0.45)) drop-shadow(0 24px 36px rgba(0,0,0,0.95))",
             }}
           />
         ) : null}
       </div>
+      <InfoTagsRow tags={scene.infoTags} accent={scene.heroColor || "#FFE600"} top={1235} />
     </AbsoluteFill>
   );
 };
@@ -849,6 +919,7 @@ const SceneBarCompare: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => 
           </div>
         </div>
       </div>
+      <InfoTagsRow tags={scene.infoTags} accent={scene.heroColor || "#FFE600"} top={1245} />
     </AbsoluteFill>
   );
 };
@@ -924,6 +995,7 @@ const SceneArchivalProof: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) 
           </div>
         </div>
       </div>
+      <InfoTagsRow tags={scene.infoTags} accent={scene.heroColor || "#ff3b47"} top={1180} />
     </AbsoluteFill>
   );
 };

@@ -119,7 +119,7 @@ def _fetch_pollinations_image(query: str) -> bytes | None:
     import requests  # type: ignore
 
     prompt_enc = urllib.parse.quote(
-        f"{query}, ultra sharp 3D studio product render, isolated on clean dark background, dramatic rim lighting, 8k photorealistic"
+        f"{query}, ultra sharp 3D isometric studio product render, vibrant bright rim lighting, high contrast, isolated on pure solid white background, no text, 8k"
     )
     url = f"https://image.pollinations.ai/prompt/{prompt_enc}?model=flux&width=1024&height=1024&nologo=true"
     try:
@@ -131,6 +131,11 @@ def _fetch_pollinations_image(query: str) -> bytes | None:
     return None
 
 
+def _is_person_or_place_query(query: str) -> bool:
+    q = query.lower()
+    return any(k in q for k in ("ceo", "founder", "president", "building", "factory", "headquarters", "newspaper", "portrait", "huang", "musk"))
+
+
 def harvest_assets(plan: dict, clean: bool = False) -> None:
     specs = plan.get("assetSpecs", [])
     if clean and HARVESTED_DIR.exists():
@@ -139,7 +144,7 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
     if not specs:
         return
 
-    from PIL import Image, ImageEnhance  # type: ignore
+    from PIL import Image, ImageEnhance, ImageStat  # type: ignore
     try:
         from rembg import remove  # type: ignore
     except Exception:
@@ -156,7 +161,11 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
         remove_bg = bool(item.get("removeBg", True))
         print(f"[HARVEST] Fetching '{query}' -> {out_path.name} (removeBg={remove_bg})")
 
-        raw_bytes = _fetch_wikimedia_image(query) or _fetch_pollinations_image(query)
+        # Prefer crisp 3D studio renders for hardware/tech/props; Wikimedia for real people/places
+        if _is_person_or_place_query(query):
+            raw_bytes = _fetch_wikimedia_image(query) or _fetch_pollinations_image(query)
+        else:
+            raw_bytes = _fetch_pollinations_image(query) or _fetch_wikimedia_image(query)
         if not raw_bytes:
             Image.new("RGBA", (512, 512), (66, 178, 242, 40)).save(out_path, "PNG")
             continue
@@ -168,7 +177,13 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
                 bbox = img.getbbox()
                 if bbox:
                     img = img.crop(bbox)
-                img = ImageEnhance.Sharpness(img).enhance(1.25)
+                # Boost brightness slightly if cutout is too dark against #04060a canvas
+                alpha = img.getchannel("A")
+                mean_rgb = sum(ImageStat.Stat(img.convert("RGB"), mask=alpha).mean) / 3.0
+                if mean_rgb < 90:
+                    img = ImageEnhance.Brightness(img).enhance(1.22)
+                    img = ImageEnhance.Contrast(img).enhance(1.12)
+                img = ImageEnhance.Sharpness(img).enhance(1.3)
                 img.save(out_path, "PNG")
                 continue
             except Exception as exc:
@@ -264,9 +279,28 @@ def _call_gemini_json(prompt: str) -> dict:
     raise RuntimeError(f"All LLM providers (Gemini + Pollinations) failed: {last_err}")
 
 
+_EMPHASIS_WORDS = {
+    "NVIDIA", "CUDA", "H100", "TSMC", "AMD", "INTEL", "AI", "GPU", "CHIP",
+    "ĐỘC", "QUYỀN", "THỊ", "PHẦN", "BÍ", "MẬT", "THAO", "TÚNG", "KHÓA", "CHẶT",
+    "BÁN", "XẺNG", "CƠN", "SỐT", "VÀNG", "LỢI", "NHUẬN", "ĐẮT", "ĐỎ", "KHỔNG", "LỒ",
+    "THỐNG", "TRỊ", "VŨ", "KHÍ", "SỰ", "THẬT", "TRIỆU", "TỶ", "NGHÌN", "USD", "ĐÔ",
+}
+
+
+def _pick_word_color(word_upper: str, accent: str, idx: int, total: int) -> str:
+    clean = re.sub(r"[^\w%$]", "", word_upper)
+    if any(ch.isdigit() for ch in clean) or "%" in word_upper or "$" in word_upper:
+        return accent
+    if clean in _EMPHASIS_WORDS:
+        return accent
+    if idx >= max(0, total - 2):
+        return accent
+    return "#FFFFFF"
+
+
 def _build_captions_from_scenes(plan: dict) -> dict:
-    """Normalize scene defaults (non-empty Text Hook) and auto-wrap word-level captions."""
-    accent_cycle = ["#FFE600", "#FF3B47", "#42B2F2"]
+    """Normalize scene defaults (non-empty Text Hook) and emit dynamic phrase-by-phrase captions."""
+    accent_cycle = ["#FFE600", "#FF4D5A", "#42B2F2"]
     for idx, scene in enumerate(plan.get("scenes", []), start=1):
         scene.setdefault("id", f"scene_{idx}")
         narration = str(scene.get("narration", "")).strip()
@@ -287,37 +321,48 @@ def _build_captions_from_scenes(plan: dict) -> dict:
         words = [w for w in narration.split() if w]
         if not words:
             continue
-        s0 = float(scene.get("startSec", 0)) + 0.1
-        s1 = max(s0 + 0.5, float(scene.get("endSec", s0 + 3.0)) - 0.1)
+        scene_start = float(scene.get("startSec", 0))
+        scene_end = float(scene.get("endSec", scene_start + 3.0))
+        spoken_dur = float(scene.get("_spokenDur") or max(0.8, scene_end - scene_start - 0.2))
+        s0 = scene_start + 0.12
+        s1 = min(scene_end - 0.04, s0 + spoken_dur)
+        if s1 <= s0 + 0.3:
+            s1 = max(s0 + 0.5, scene_end - 0.05)
+
+        highlight_color = "#FFE600" if s_idx % 2 == 0 else "#FF4D5A"
         step = (s1 - s0) / len(words)
-        highlight_color = "#FFE600" if s_idx % 2 == 0 else "#FF3B47"
-        tokens = []
-        hi_start = max(0, len(words) - 2)
-        for i, w in enumerate(words):
-            t0 = round(s0 + i * step, 2)
-            t1 = round(s0 + (i + 1) * step, 2)
-            tokens.append({
-                "text": w.upper(),
-                "startSec": t0,
-                "endSec": t1,
-                "color": highlight_color if i >= hi_start else "#FFFFFF",
-            })
-        # Wrap cleanly: max 3 words or 18 chars per line so captions never overflow 9:16 width
-        lines: list[list[dict]] = []
-        cur_line: list[dict] = []
-        cur_chars = 0
-        for tok in tokens:
-            tlen = len(tok["text"])
-            if cur_line and (len(cur_line) >= 3 or cur_chars + 1 + tlen > 18):
+
+        # Split words into dynamic 5-6 word phrases so captions roll continuously with the voice
+        phrase_size = 5
+        for p_start in range(0, len(words), phrase_size):
+            chunk = words[p_start:p_start + phrase_size]
+            p0 = round(s0 + p_start * step, 2)
+            p1 = round(s0 + (p_start + len(chunk)) * step, 2)
+            lines: list[list[dict]] = []
+            cur_line: list[dict] = []
+            cur_chars = 0
+            for j, w in enumerate(chunk):
+                global_i = p_start + j
+                t0 = round(s0 + global_i * step, 2)
+                t1 = round(s0 + (global_i + 1) * step, 2)
+                w_upper = w.upper()
+                tok = {
+                    "text": w_upper,
+                    "startSec": t0,
+                    "endSec": t1,
+                    "color": _pick_word_color(w_upper, highlight_color, global_i, len(words)),
+                }
+                tlen = len(w_upper)
+                if cur_line and (len(cur_line) >= 3 or cur_chars + 1 + tlen > 16):
+                    lines.append(cur_line)
+                    cur_line = [tok]
+                    cur_chars = tlen
+                else:
+                    cur_line.append(tok)
+                    cur_chars += (1 if cur_line else 0) + tlen
+            if cur_line:
                 lines.append(cur_line)
-                cur_line = [tok]
-                cur_chars = tlen
-            else:
-                cur_line.append(tok)
-                cur_chars += (1 if cur_line else 0) + tlen
-        if cur_line:
-            lines.append(cur_line)
-        captions.append({"startSec": round(s0, 2), "endSec": round(s1, 2), "lines": lines[:3]})
+            captions.append({"startSec": p0, "endSec": p1, "lines": lines[:2]})
     plan["captions"] = captions
     return plan
 
@@ -330,10 +375,11 @@ def mode_create(topic_prompt: str) -> None:
 Hãy sáng tác JSON scene_plan chất lượng cao cho yêu cầu: "{topic_prompt}"
 
 NGUYÊN TẮC NỘI DUNG BẮT BUỘC:
-- Viết đủ 4–5 cảnh (hoặc theo đúng thời lượng yêu cầu), đi theo 5 nhịp giữ chân: (1) Hook nghịch lý/số liệu sốc -> (2) Cơ chế & con số thật -> (3) So sánh đối lập -> (4) Bóc trần bản chất "WHY" -> (5) Kết luận đắt giá.
-- Lời thoại (`narration`) phải chứa KIẾN THỨC THẬT, tên riêng thật, con số thật (không nói chung chung sáo rỗng).
-- `eyebrow` ngắn gọn 2–4 từ, `heroText` cực đắt giá 1–3 từ hoặc con số lớn (VD: "90% THỊ PHẦN", "30.000 USD", "ĐỘC QUYỀN CUDA").
-- TRONG `assetSpecs`: CHỈ tìm ảnh VẬT THỂ / NHÂN VẬT / SẢN PHẨM THẬT ngoài đời bằng tiếng Anh (VD: "Nvidia H100 GPU chip", "Jensen Huang CEO", "gold shovel", "semiconductor wafer"). TUYỆT ĐỐI KHÔNG tìm ảnh "chart", "odometer", "button" (vì hệ thống đã tự vẽ biểu đồ và odometer sắc nét).
+- Viết đủ 5 cảnh giàu thông tin (hoặc theo đúng thời lượng yêu cầu), đi theo 5 nhịp giữ chân: (1) Hook nghịch lý/số liệu sốc -> (2) Cơ chế & con số thật -> (3) So sánh đối lập -> (4) Bóc trần bản chất "WHY" -> (5) Kết luận đắt giá.
+- Lời thoại (`narration`) mỗi cảnh dài 12–18 từ, chứa KIẾN THỨC THẬT, tên riêng thật, con số thật, giải thích rõ TẠI SAO (không nói chung chung sáo rỗng).
+- `eyebrow` ngắn gọn 2–4 từ, `heroText` cực đắt giá 1–3 từ hoặc con số lớn (VD: "90% THỊ PHẦN", "30.000 USD", "ĐỘC QUYỀN CUDA"), `heroColor` chọn màu sáng rực rỡ (`#FFE600`, `#FF4D5A`, `#42B2F2`, `#FFFFFF`).
+- MỖI CẢNH PHẢI CÓ `infoTags`: mảng 2–3 thẻ thông tin ngắn chứa số liệu/kiến thức thật hiển thị trên màn hình (VD: `["30.000 USD / CHIP", "80GB HBM3", "TSMC 4NM"]`).
+- TRONG `assetSpecs`: CHỈ tìm ảnh VẬT THỂ / NHÂN VẬT / SẢN PHẨM THẬT ngoài đời bằng tiếng Anh (VD: "Nvidia H100 GPU graphics card", "Jensen Huang CEO", "golden shovel mining", "silicon semiconductor wafer"). TUYỆT ĐỐI KHÔNG tìm ảnh "chart", "odometer", "button".
 
 CHỈ trả về JSON hợp lệ (không markdown ```json):
 {{
@@ -514,6 +560,7 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
 
         if vo_file is not None:
             spoken_dur = _get_audio_duration(vo_file)
+            scene["_spokenDur"] = round(spoken_dur, 2)
             scene_dur = max(planned_dur, spoken_dur + 0.35)
             delay_ms = int(round((cursor_sec + 0.12) * 1000))
             vo_entries.append((vo_file, delay_ms))
