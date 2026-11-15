@@ -145,7 +145,7 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
     if not specs:
         return
 
-    from PIL import Image, ImageEnhance, ImageStat  # type: ignore
+    from PIL import Image, ImageEnhance, ImageFilter, ImageStat  # type: ignore
     try:
         from rembg import remove  # type: ignore
     except Exception:
@@ -184,7 +184,7 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
                 if mean_rgb < 90:
                     img = ImageEnhance.Brightness(img).enhance(1.22)
                     img = ImageEnhance.Contrast(img).enhance(1.12)
-                img = ImageEnhance.Sharpness(img).enhance(1.3)
+                img = img.filter(ImageFilter.UnsharpMask(radius=1.5, percent=150, threshold=2))
                 img.save(out_path, "PNG")
                 continue
             except Exception as exc:
@@ -214,7 +214,7 @@ def _call_gemini_json(prompt: str) -> dict:
     last_err = None
 
     if api_key:
-        for model in ("gemini-3.8-flash", "gemini-flash-latest"):
+        for model in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-flash-latest"):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
@@ -223,7 +223,7 @@ def _call_gemini_json(prompt: str) -> dict:
             for retry in range(2):
                 try:
                     print(f"[GEMINI] Calling {model} (try {retry + 1})...")
-                    r = requests.post(url, json=payload, timeout=60)
+                    r = requests.post(url, json=payload, timeout=90)
                     if r.status_code == 404:
                         print(f"[GEMINI] {model} returned 404, skipping...")
                         last_err = r.text[:300]
@@ -242,14 +242,14 @@ def _call_gemini_json(prompt: str) -> dict:
                     last_err = exc
                     time.sleep(2)
 
-    for attempt in range(1, 3):
+    for p_model in ("openai-large", "openai"):
         try:
-            print(f"[POLLINATIONS] Calling free model 'openai' POST (attempt {attempt})...")
+            print(f"[POLLINATIONS] Calling free model '{p_model}' POST...")
             r = requests.post(
                 "https://text.pollinations.ai/openai",
                 headers={"Content-Type": "application/json"},
                 json={
-                    "model": "openai",
+                    "model": p_model,
                     "messages": [{"role": "user", "content": prompt}],
                     "reasoning_effort": "low",
                     "max_tokens": 4096,
@@ -258,11 +258,11 @@ def _call_gemini_json(prompt: str) -> dict:
             )
             if not r.ok:
                 print(f"[POLLINATIONS] POST HTTP {r.status_code}: {r.text[:300]}")
-                r.raise_for_status()
+                continue
             text = r.json()["choices"][0]["message"]["content"]
             return _extract_json_object(text)
         except Exception as exc:
-            print(f"[POLLINATIONS] attempt {attempt} error: {exc}")
+            print(f"[POLLINATIONS] {p_model} error: {exc}")
             last_err = exc
 
     try:
@@ -375,12 +375,17 @@ def mode_create(topic_prompt: str) -> None:
     prompt = f"""Bạn là Đạo diễn Điều tra kênh HaDa Why (@hadawhy) — chuyên làm video ngắn 9:16 bóc trần sự thật kinh tế/công nghệ với DỮ LIỆU THẬT, CON SỐ CỤ THỂ và CƠ CHẾ SÂU SẮC.
 Hãy sáng tác JSON scene_plan chất lượng cao cho yêu cầu: "{topic_prompt}"
 
-NGUYÊN TẮC NỘI DUNG BẮT BUỘC:
-- Viết đủ 5 cảnh giàu thông tin (hoặc theo đúng thời lượng yêu cầu), đi theo 5 nhịp giữ chân: (1) Hook nghịch lý/số liệu sốc -> (2) Cơ chế & con số thật -> (3) So sánh đối lập -> (4) Bóc trần bản chất "WHY" -> (5) Kết luận đắt giá.
-- Lời thoại (`narration`) mỗi cảnh dài 12–18 từ, chứa KIẾN THỨC THẬT, tên riêng thật, con số thật, giải thích rõ TẠI SAO (không nói chung chung sáo rỗng).
-- `eyebrow` ngắn gọn 2–4 từ, `heroText` cực đắt giá 1–3 từ hoặc con số lớn (VD: "90% THỊ PHẦN", "30.000 USD", "ĐỘC QUYỀN CUDA"), `heroColor` chọn màu sáng rực rỡ (`#FFE600`, `#FF4D5A`, `#42B2F2`, `#FFFFFF`).
-- MỖI CẢNH PHẢI CÓ `infoTags`: mảng 2–3 thẻ thông tin ngắn chứa số liệu/kiến thức thật hiển thị trên màn hình (VD: `["30.000 USD / CHIP", "80GB HBM3", "TSMC 4NM"]`).
-- TRONG `assetSpecs`: CHỈ tìm ảnh VẬT THỂ / NHÂN VẬT / SẢN PHẨM THẬT ngoài đời bằng tiếng Anh (VD: "Nvidia H100 GPU graphics card", "Jensen Huang CEO", "golden shovel mining", "silicon semiconductor wafer"). TUYỆT ĐỐI KHÔNG tìm ảnh "chart", "odometer", "button".
+NGUYÊN TẮC NỘI DUNG & TEXT HOOK BẮT BUỘC:
+- Viết đủ 5 cảnh giàu thông tin (hoặc theo đúng thời lượng yêu cầu), theo 5 nhịp điều tra gây tò mò tột độ:
+  (1) Hook nghịch lý thực tế (cấm mở bài sáo rỗng) -> (2) Bằng chứng số liệu sốc -> (3) So sánh đối lập áp đảo -> (4) Chuỗi nhân-quả bóc trần cơ chế "WHY" ít ai biết -> (5) Kết luận sắc lạnh.
+- Lời thoại (`narration`) mỗi cảnh dài 13–19 từ, chứa KIẾN THỨC THẬT, tên riêng thật, con số thật, giải thích rõ CƠ CHẾ TẠI SAO (tạo cảm giác "à hóa ra là vậy!").
+- **LUẬT THÉP TEXT HOOK (`eyebrow` & `heroText`):**
+  * TUYỆT ĐỐI CẤM ĐẶT CÂU HỎI XÀM trong `eyebrow` hay `heroText` (CẤM "TẠI SAO?", "VÌ SAO?", "LÀ GÌ?", "CÓ BIẾT?", dấu "?").
+  * `heroText` (1–3 từ) PHẢI LÀ **SỰ THẬT CHẤN ĐỘNG / CON SỐ / NGHỊCH LÝ ĐẮT GIÁ** giải quyết thẳng vấn đề (VD: `"KẺ BÁN XẺNG"`, `"30.000 USD"`, `"90% ĐỘC TÔN"`, `"CÁI BẪY CUDA"`, `"KHÔNG LỐI THOÁT"`).
+  * `heroColor` chọn màu sáng rực rỡ (`#FFE600`, `#FF4D5A`, `#42B2F2`, `#FFFFFF`).
+- MỖI CẢNH PHẢI CÓ `infoTags`: mảng 2–3 thẻ thông tin ngắn chứa số liệu/kiến thức thật (VD: `["30.000 USD / CHIP", "80GB HBM3", "LỢI NHUẬN 75%"]`).
+- BẮT BUỘC CÓ ÍT NHẤT 1 CẢNH DÙNG `"causal_chain"` với `chainSteps` (3 bước nối tiếp nhau A -> B -> C để người xem thấy sự việc này kéo theo sự việc kia!).
+- TRONG `assetSpecs`: CHỈ tìm ảnh VẬT THỂ / NHÂN VẬT THẬT ngoài đời bằng tiếng Anh (VD: `"golden miner shovel"`, `"Nvidia H100 GPU hardware"`, `"Jensen Huang CEO"`, `"heavy steel padlock chain"`). TUYỆT ĐỐI CẤM tìm `"chart"`, `"pie"`, `"code"`, `"price"`, `"screenshot"`.
 
 CHỈ trả về JSON hợp lệ (không markdown ```json):
 {{
@@ -408,15 +413,16 @@ CHỈ trả về JSON hợp lệ (không markdown ```json):
   ]
 }}
 
-8 layout hợp lệ (luân phiên đa dạng, ưu tiên stat_odometer/bar_compare cho số liệu):
-- "hero_prop": primaryAsset, primaryLabel, subNote, yearWatermark
+9 layout hợp lệ (luân phiên đa dạng, bắt buộc dùng causal_chain + bar_compare/stat_odometer):
+- "hero_prop": primaryAsset, primaryLabel, subNote, yearWatermark, infoTags
 - "compare_two": leftAsset, leftLabel, leftLabelColor, rightAsset, rightLabel, rightLabelColor, centerAsset, yearWatermark
 - "sat_map": mapRegion ("fra"|"uk"|"usa"|"world"), mapCaption
 - "two_tier": topLeftAsset, topLeftLabel, topRightAsset, bottomAsset, bottomTitle, bottomHighlight
 - "split_duo": leftAsset, leftLabel, rightAsset, rightLabel, ctaText
-- "stat_odometer": statNumber (số nguyên), statSuffix (vd "%", " TỶ $"), statLabel, primaryAsset, yearWatermark
-- "bar_compare": leftValue (số), leftLabel, leftLabelColor, rightValue (số), rightLabel, rightLabelColor, yearWatermark
-- "archival_proof": primaryAsset, stampText (vd "SỰ THẬT 100%"), yearWatermark
+- "stat_odometer": statNumber (số nguyên), statSuffix (vd "%", " USD"), statLabel, primaryAsset, yearWatermark, infoTags
+- "bar_compare": leftValue (số), leftLabel, leftLabelColor, rightValue (số), rightLabel, rightLabelColor, yearWatermark, infoTags
+- "archival_proof": primaryAsset, stampText (vd "SỰ THẬT 100%"), yearWatermark, infoTags
+- "causal_chain": chainSteps ([{{"badge":"BƯỚC 1","title":"...","detail":"..."}}, ... 3 bước nối tiếp]), primaryAsset (tùy chọn), yearWatermark
 
 Mọi file "harvested/<name>.png" dùng trong scenes phải có trong assetSpecs."""
 

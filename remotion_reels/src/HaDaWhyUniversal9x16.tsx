@@ -35,7 +35,8 @@ export interface UniversalSceneSpec {
     | "split_duo"
     | "stat_odometer"
     | "bar_compare"
-    | "archival_proof";
+    | "archival_proof"
+    | "causal_chain";
   eyebrow: string;
   heroText: string;
   heroColor?: string;
@@ -66,6 +67,7 @@ export interface UniversalSceneSpec {
   rightValue?: number;
   stampText?: string;
   infoTags?: string[];
+  chainSteps?: Array<{ badge?: string; title: string; detail: string }>;
 }
 
 export interface UniversalScenePlan {
@@ -1000,11 +1002,164 @@ const SceneArchivalProof: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) 
   );
 };
 
+const SceneCausalChain: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const accent = scene.heroColor || "#42B2F2";
+  const steps = (scene.chainSteps && scene.chainSteps.length > 0)
+    ? scene.chainSteps.slice(0, 3)
+    : (scene.infoTags || []).slice(0, 3).map((t, i) => ({
+        badge: `BƯỚC 0${i + 1}`,
+        title: String(t),
+        detail: "",
+      }));
+
+  return (
+    <AbsoluteFill>
+      <WatermarkYear text={scene.yearWatermark} />
+      <ImpactHook
+        eyebrow={scene.eyebrow}
+        heroText={scene.heroText}
+        heroColor={scene.heroColor}
+        subNote={scene.subNote}
+      />
+      {scene.primaryAsset ? (
+        <Img
+          src={staticFile(scene.primaryAsset)}
+          style={{
+            position: "absolute",
+            top: 480,
+            left: "50%",
+            width: 720,
+            height: 720,
+            marginLeft: -360,
+            objectFit: "contain",
+            opacity: 0.16,
+            filter: "blur(1px) drop-shadow(0 0 28px rgba(66,178,242,0.4))",
+            pointerEvents: "none",
+            zIndex: 6,
+          }}
+        />
+      ) : null}
+      <div
+        style={{
+          position: "absolute",
+          top: 470,
+          left: 72,
+          right: 72,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 14,
+          zIndex: 16,
+        }}
+      >
+        {steps.map((st, idx) => {
+          const pop = spring({ frame: frame - (4 + idx * 11), fps, config: { damping: 13, stiffness: 185 } });
+          const beamProg = spring({ frame: frame - (10 + idx * 11), fps, config: { damping: 15, stiffness: 140 } });
+          const nodeColor = idx === 0 ? "#42B2F2" : idx === 1 ? "#FFE600" : "#FF4D5A";
+          const pulseY = ((frame * 2.4 + idx * 14) % 44);
+          return (
+            <React.Fragment key={idx}>
+              <div
+                style={{
+                  width: "100%",
+                  padding: "22px 28px",
+                  borderRadius: 22,
+                  background: "linear-gradient(135deg, rgba(14,24,46,0.92) 0%, rgba(7,12,24,0.94) 100%)",
+                  border: `2.5px solid ${nodeColor}`,
+                  boxShadow: `0 0 28px ${nodeColor}38, 0 18px 36px rgba(0,0,0,0.85)`,
+                  transform: `translateX(${interpolate(pop, [0, 1], [idx % 2 === 0 ? -90 : 90, 0])}px) scale(${interpolate(pop, [0, 1], [0.88, 1])})`,
+                  opacity: pop,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 20,
+                }}
+              >
+                <div
+                  style={{
+                    minWidth: 112,
+                    padding: "10px 14px",
+                    borderRadius: 14,
+                    background: nodeColor,
+                    color: "#05070B",
+                    fontFamily: FONT_HEADING,
+                    fontSize: 24,
+                    fontWeight: 900,
+                    textAlign: "center",
+                    letterSpacing: 1,
+                  }}
+                >
+                  {st.badge || `0${idx + 1}`}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      fontFamily: FONT_HEADING,
+                      fontSize: 34,
+                      fontWeight: 900,
+                      color: "#FFFFFF",
+                      lineHeight: 1.15,
+                    }}
+                  >
+                    {String(st.title || "").toUpperCase()}
+                  </div>
+                  {st.detail ? (
+                    <div
+                      style={{
+                        marginTop: 6,
+                        fontFamily: FONT_BODY,
+                        fontSize: 24,
+                        fontWeight: 700,
+                        color: "#CBD5E1",
+                        lineHeight: 1.25,
+                      }}
+                    >
+                      {st.detail}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              {idx < steps.length - 1 ? (
+                <div
+                  style={{
+                    position: "relative",
+                    width: 6,
+                    height: 46,
+                    borderRadius: 3,
+                    background: `linear-gradient(180deg, ${nodeColor}, ${accent})`,
+                    opacity: beamProg,
+                    transform: `scaleY(${beamProg})`,
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: -5,
+                      top: pulseY,
+                      width: 16,
+                      height: 16,
+                      borderRadius: "50%",
+                      background: "#FFFFFF",
+                      boxShadow: `0 0 16px ${nodeColor}`,
+                    }}
+                  />
+                </div>
+              ) : null}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 const SceneMotionGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
   const punch = spring({ frame, fps, config: { damping: 14, stiffness: 220 } });
-  const camScale = interpolate(punch, [0, 1], [1.08, 1]);
+  const camScale = interpolate(punch, [0, 1], [1.1, 1]);
+  const camShiftY = interpolate(punch, [0, 1], [28, 0]);
   const flashOpacity = interpolate(frame, [0, 7], [0.24, 0], { extrapolateRight: "clamp" });
   const exitOpacity = interpolate(
     frame,
@@ -1014,7 +1169,7 @@ const SceneMotionGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
   );
 
   return (
-    <AbsoluteFill style={{ transform: `scale(${camScale})`, opacity: exitOpacity }}>
+    <AbsoluteFill style={{ transform: `translateY(${camShiftY}px) scale(${camScale})`, opacity: exitOpacity }}>
       {children}
       {flashOpacity > 0.01 ? (
         <AbsoluteFill
@@ -1089,6 +1244,7 @@ export const HaDaWhyUniversal9x16: React.FC<HaDaWhyUniversal9x16Props> = ({
               {scene.layout === "stat_odometer" && <SceneStatOdometer scene={scene} />}
               {scene.layout === "bar_compare" && <SceneBarCompare scene={scene} />}
               {scene.layout === "archival_proof" && <SceneArchivalProof scene={scene} />}
+              {scene.layout === "causal_chain" && <SceneCausalChain scene={scene} />}
             </SceneMotionGate>
           </Sequence>
         );
