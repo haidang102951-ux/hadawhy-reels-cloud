@@ -214,7 +214,7 @@ def _call_gemini_json(prompt: str) -> dict:
     last_err = None
 
     if api_key:
-        for model in ("gemini-2.5-flash", "gemini-2.5-pro", "gemini-flash-latest"):
+        for model in ("gemini-3.8-flash", "gemini-flash-latest"):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
@@ -223,7 +223,7 @@ def _call_gemini_json(prompt: str) -> dict:
             for retry in range(2):
                 try:
                     print(f"[GEMINI] Calling {model} (try {retry + 1})...")
-                    r = requests.post(url, json=payload, timeout=90)
+                    r = requests.post(url, json=payload, timeout=120)
                     if r.status_code == 404:
                         print(f"[GEMINI] {model} returned 404, skipping...")
                         last_err = r.text[:300]
@@ -231,7 +231,7 @@ def _call_gemini_json(prompt: str) -> dict:
                     if r.status_code in (429, 500, 502, 503, 504):
                         print(f"[GEMINI] {model} HTTP {r.status_code}: {r.text[:200]}")
                         last_err = f"HTTP {r.status_code}"
-                        time.sleep(4)
+                        time.sleep(15 if r.status_code == 429 else 5)
                         continue
                     r.raise_for_status()
                     data = r.json()
@@ -240,30 +240,35 @@ def _call_gemini_json(prompt: str) -> dict:
                 except Exception as exc:
                     print(f"[GEMINI] {model} error: {exc}")
                     last_err = exc
-                    time.sleep(2)
+                    time.sleep(3)
 
-    for p_model in ("openai-large", "openai"):
-        try:
-            print(f"[POLLINATIONS] Calling free model '{p_model}' POST...")
-            r = requests.post(
-                "https://text.pollinations.ai/openai",
-                headers={"Content-Type": "application/json"},
-                json={
-                    "model": p_model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "reasoning_effort": "low",
-                    "max_tokens": 4096,
-                },
-                timeout=90,
-            )
-            if not r.ok:
-                print(f"[POLLINATIONS] POST HTTP {r.status_code}: {r.text[:300]}")
-                continue
-            text = r.json()["choices"][0]["message"]["content"]
-            return _extract_json_object(text)
-        except Exception as exc:
-            print(f"[POLLINATIONS] {p_model} error: {exc}")
-            last_err = exc
+    for p_model in ("deepseek", "openai"):
+        for attempt in range(1, 3):
+            try:
+                print(f"[POLLINATIONS] Calling free model '{p_model}' POST (attempt {attempt})...")
+                r = requests.post(
+                    "https://text.pollinations.ai/openai",
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "model": p_model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "reasoning_effort": "low",
+                        "max_tokens": 4096,
+                    },
+                    timeout=120,
+                )
+                if r.status_code == 402:
+                    print(f"[POLLINATIONS] {p_model} 402 rate limit, waiting 47s...")
+                    time.sleep(47)
+                    continue
+                if not r.ok:
+                    print(f"[POLLINATIONS] POST HTTP {r.status_code}: {r.text[:300]}")
+                    break
+                text = r.json()["choices"][0]["message"]["content"]
+                return _extract_json_object(text)
+            except Exception as exc:
+                print(f"[POLLINATIONS] {p_model} error: {exc}")
+                last_err = exc
 
     try:
         print("[POLLINATIONS] Trying GET fallback...")
