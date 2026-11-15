@@ -27,7 +27,15 @@ export interface UniversalSceneSpec {
   id: string;
   startSec: number;
   endSec: number;
-  layout: "hero_prop" | "compare_two" | "sat_map" | "two_tier" | "split_duo";
+  layout:
+    | "hero_prop"
+    | "compare_two"
+    | "sat_map"
+    | "two_tier"
+    | "split_duo"
+    | "stat_odometer"
+    | "bar_compare"
+    | "archival_proof";
   eyebrow: string;
   heroText: string;
   heroColor?: string;
@@ -51,6 +59,12 @@ export interface UniversalSceneSpec {
   bottomTitle?: string;
   bottomHighlight?: string;
   ctaText?: string;
+  statNumber?: number;
+  statSuffix?: string;
+  statLabel?: string;
+  leftValue?: number;
+  rightValue?: number;
+  stampText?: string;
 }
 
 export interface UniversalScenePlan {
@@ -673,6 +687,225 @@ const SceneSplitDuo: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
   );
 };
 
+const SceneStatOdometer: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const pop = spring({ frame: frame - 3, fps, config: { damping: 12, stiffness: 160 } });
+  const targetNum = Number(scene.statNumber ?? 100);
+  const countProgress = interpolate(frame, [4, 38], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const eased = 1 - Math.pow(1 - countProgress, 3);
+  const currentVal = Math.round(targetNum * eased);
+  const floatY = Math.sin(frame * 0.06) * 10;
+
+  return (
+    <AbsoluteFill>
+      <WatermarkYear text={scene.yearWatermark} />
+      <ImpactHook eyebrow={scene.eyebrow} heroText={scene.heroText} heroColor={scene.heroColor} />
+      <div
+        style={{
+          position: "absolute",
+          top: 520,
+          left: 60,
+          right: 60,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          transform: `translateY(${floatY}px) scale(${interpolate(pop, [0, 1], [0.78, 1])})`,
+          opacity: pop,
+          zIndex: 14,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: FONT_HEADING,
+            fontSize: 158,
+            fontWeight: 900,
+            color: scene.heroColor || "#FFE600",
+            WebkitTextStroke: "14px #06080E",
+            paintOrder: "stroke fill",
+            filter: `drop-shadow(0 0 36px ${(scene.heroColor || "#FFE600")}88) drop-shadow(0 16px 32px rgba(0,0,0,0.95))`,
+            lineHeight: 1,
+          }}
+        >
+          {currentVal.toLocaleString("en-US")}
+          {scene.statSuffix || ""}
+        </div>
+        {scene.statLabel ? (
+          <div
+            style={{
+              marginTop: 18,
+              fontFamily: FONT_BODY,
+              fontSize: 34,
+              fontWeight: 900,
+              color: "#FFFFFF",
+              letterSpacing: 2,
+              textAlign: "center",
+              textShadow: "0 4px 16px rgba(0,0,0,0.95)",
+            }}
+          >
+            {scene.statLabel}
+          </div>
+        ) : null}
+        {scene.primaryAsset ? (
+          <Img
+            src={staticFile(scene.primaryAsset)}
+            style={{
+              marginTop: 32,
+              height: 360,
+              maxWidth: 680,
+              objectFit: "contain",
+              filter: "drop-shadow(0 0 18px rgba(66,178,242,0.35)) drop-shadow(0 24px 36px rgba(0,0,0,0.95))",
+            }}
+          />
+        ) : null}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+const SceneBarCompare: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const grow = spring({ frame: frame - 6, fps, config: { damping: 14, stiffness: 120 } });
+  const lv = Math.max(1, Number(scene.leftValue ?? 25));
+  const rv = Math.max(1, Number(scene.rightValue ?? 90));
+  const maxV = Math.max(lv, rv);
+  const leftH = Math.round((lv / maxV) * 520 * grow);
+  const rightH = Math.round((rv / maxV) * 520 * grow);
+
+  return (
+    <AbsoluteFill>
+      <WatermarkYear text={scene.yearWatermark} />
+      <ImpactHook eyebrow={scene.eyebrow} heroText={scene.heroText} heroColor={scene.heroColor} />
+      <div
+        style={{
+          position: "absolute",
+          top: 520,
+          left: 90,
+          right: 90,
+          height: 700,
+          display: "flex",
+          justifyContent: "space-around",
+          alignItems: "flex-end",
+          zIndex: 14,
+        }}
+      >
+        {/* Left Bar */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 320 }}>
+          <div style={{ fontFamily: FONT_HEADING, fontSize: 56, color: scene.leftLabelColor || "#94a3b8", marginBottom: 14 }}>
+            {Math.round(lv * grow)}
+          </div>
+          <div
+            style={{
+              width: 170,
+              height: Math.max(24, leftH),
+              borderRadius: "18px 18px 6px 6px",
+              background: `linear-gradient(180deg, ${scene.leftLabelColor || "#64748b"} 0%, rgba(15,23,42,0.85) 100%)`,
+              boxShadow: `0 0 28px ${(scene.leftLabelColor || "#64748b")}55`,
+            }}
+          />
+          <div style={{ marginTop: 18, fontFamily: FONT_BODY, fontSize: 28, color: "#FFFFFF", textAlign: "center" }}>
+            {scene.leftLabel || "TRƯỚC"}
+          </div>
+        </div>
+        {/* Right Bar */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 320 }}>
+          <div style={{ fontFamily: FONT_HEADING, fontSize: 64, color: scene.rightLabelColor || "#FFE600", marginBottom: 14 }}>
+            {Math.round(rv * grow)}
+          </div>
+          <div
+            style={{
+              width: 170,
+              height: Math.max(24, rightH),
+              borderRadius: "18px 18px 6px 6px",
+              background: `linear-gradient(180deg, ${scene.rightLabelColor || "#FFE600"} 0%, rgba(120,53,15,0.85) 100%)`,
+              boxShadow: `0 0 36px ${(scene.rightLabelColor || "#FFE600")}77`,
+            }}
+          />
+          <div style={{ marginTop: 18, fontFamily: FONT_BODY, fontSize: 28, color: scene.rightLabelColor || "#FFE600", textAlign: "center" }}>
+            {scene.rightLabel || "SAU"}
+          </div>
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+const SceneArchivalProof: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const pop = spring({ frame: frame - 3, fps, config: { damping: 13, stiffness: 150 } });
+  const stampPop = spring({ frame: frame - 16, fps, config: { damping: 10, stiffness: 280 } });
+  const scanY = interpolate(frame % 60, [0, 60], [0, 620]);
+
+  return (
+    <AbsoluteFill>
+      <WatermarkYear text={scene.yearWatermark} />
+      <ImpactHook eyebrow={scene.eyebrow} heroText={scene.heroText} heroColor={scene.heroColor} />
+      <div
+        style={{
+          position: "absolute",
+          top: 480,
+          left: 80,
+          right: 80,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          transform: `perspective(1200px) rotateY(-6deg) rotateX(4deg) scale(${interpolate(pop, [0, 1], [0.85, 1])})`,
+          opacity: pop,
+          zIndex: 14,
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            width: 840,
+            height: 640,
+            borderRadius: 20,
+            overflow: "hidden",
+            border: "3px solid rgba(250,204,21,0.65)",
+            boxShadow: "0 36px 72px rgba(0,0,0,0.95)",
+            background: "#0b1120",
+          }}
+        >
+          {scene.primaryAsset ? (
+            <Img src={staticFile(scene.primaryAsset)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : null}
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: scanY,
+              height: 4,
+              background: "linear-gradient(90deg, transparent, #ff3b47, transparent)",
+              boxShadow: "0 0 18px #ff3b47",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              right: 36,
+              bottom: 36,
+              padding: "10px 26px",
+              border: "5px solid #ff3b47",
+              borderRadius: 10,
+              fontFamily: FONT_HEADING,
+              fontSize: 34,
+              color: "#ff3b47",
+              background: "rgba(10,10,14,0.82)",
+              transform: `rotate(-12deg) scale(${interpolate(stampPop, [0, 1], [2.2, 1])})`,
+              opacity: stampPop,
+            }}
+          >
+            {scene.stampText || "XÁC THỰC 100%"}
+          </div>
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 const SceneMotionGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -759,6 +992,9 @@ export const HaDaWhyUniversal9x16: React.FC<HaDaWhyUniversal9x16Props> = ({
               {scene.layout === "sat_map" && <SceneSatMap scene={scene} />}
               {scene.layout === "two_tier" && <SceneTwoTier scene={scene} />}
               {scene.layout === "split_duo" && <SceneSplitDuo scene={scene} />}
+              {scene.layout === "stat_odometer" && <SceneStatOdometer scene={scene} />}
+              {scene.layout === "bar_compare" && <SceneBarCompare scene={scene} />}
+              {scene.layout === "archival_proof" && <SceneArchivalProof scene={scene} />}
             </SceneMotionGate>
           </Sequence>
         );

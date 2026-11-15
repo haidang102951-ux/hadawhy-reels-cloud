@@ -329,12 +329,15 @@ CHỈ trả về JSON hợp lệ (không markdown ```json):
   ]
 }}
 
-5 layout hợp lệ:
+8 layout hợp lệ (luân phiên đa dạng, ưu tiên stat_odometer/bar_compare cho số liệu):
 - "hero_prop": primaryAsset, primaryLabel, subNote, yearWatermark
 - "compare_two": leftAsset, leftLabel, leftLabelColor, rightAsset, rightLabel, rightLabelColor, centerAsset, yearWatermark
 - "sat_map": mapRegion ("fra"|"uk"|"usa"|"world"), mapCaption
 - "two_tier": topLeftAsset, topLeftLabel, topRightAsset, bottomAsset, bottomTitle, bottomHighlight
 - "split_duo": leftAsset, leftLabel, rightAsset, rightLabel, ctaText
+- "stat_odometer": statNumber (số nguyên), statSuffix (vd "%", " TỶ $"), statLabel, primaryAsset, yearWatermark
+- "bar_compare": leftValue (số), leftLabel, leftLabelColor, rightValue (số), rightLabel, rightLabelColor, yearWatermark
+- "archival_proof": primaryAsset, stampText (vd "SỰ THẬT 100%"), yearWatermark
 
 Mọi file "harvested/<name>.png" dùng trong scenes phải có trong assetSpecs."""
 
@@ -397,21 +400,35 @@ def _normalize_vi_numbers(text: str) -> str:
     return text
 
 
+def _get_audio_duration(path: Path) -> float:
+    try:
+        out = subprocess.check_output(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
+            text=True,
+        ).strip()
+        return max(0.3, float(out))
+    except Exception:
+        return 2.5
+
+
 def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
-    """Build Vietnamese voiceover (VieNeu-TTS 'Hải Đăng', fallback edge-tts) + Text Hook SFX + Ducked BGM at -14.0 LUFS."""
+    """Synthesize VieNeu-TTS 'Hải Đăng' per scene, sync scene_plan timing to real audio duration, and mix SFX + BGM at -14.0 LUFS."""
     scenes = plan.get("scenes", [])
-    captions = plan.get("captions", [])
-    total_dur = max((float(s.get("endSec", 0)) for s in scenes), default=10.0)
-    if total_dur <= 0:
+    if not scenes:
         return None
 
     temp_dir.mkdir(parents=True, exist_ok=True)
     sfx_dir = REMOTION_DIR / "public" / "sfx"
-    sfx_cycle = [
-        sfx_dir / "bass_hit.mp3",
-        sfx_dir / "zoom_hit.mp3",
-        sfx_dir / "whoosh_big.mp3",
-    ]
+    sfx_map = {
+        "hero_prop": sfx_dir / "bass_hit.mp3",
+        "stat_odometer": sfx_dir / "bass_hit.mp3",
+        "compare_two": sfx_dir / "metal_hit.mp3",
+        "bar_compare": sfx_dir / "metal_hit.mp3",
+        "sat_map": sfx_dir / "whoosh_big.mp3",
+        "archival_proof": sfx_dir / "whoosh_big.mp3",
+        "two_tier": sfx_dir / "zoom_hit.mp3",
+        "split_duo": sfx_dir / "zoom_hit.mp3",
+    }
     bgm_path = BASE_DIR / "assets" / "music" / "hadawhy_mystery_bgm.mp3"
 
     # Initialize VieNeu-TTS (channel voice: Hải Đăng)
@@ -423,70 +440,78 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
     except Exception as exc:
         print(f"[WARN] VieNeu-TTS unavailable, falling back to edge-tts: {exc}")
 
-    # 1. Generate per-phrase Vietnamese voiceover clips
+    # 1. Generate per-scene voiceover and measure exact spoken duration
     vo_entries: list[tuple[Path, int]] = []
-    for idx, phrase in enumerate(captions):
-        words = []
-        for line in phrase.get("lines", []):
-            for tok in line:
-                t = str(tok.get("text", "")).strip()
-                if t:
-                    words.append(t)
-        text = " ".join(words).strip()
-        if not text:
-            continue
-        delay_ms = max(0, int(round(float(phrase.get("startSec", 0)) * 1000)))
-        if vieneu_client is not None:
-            vo_wav = temp_dir / f"vo_{idx:02d}.wav"
-            try:
-                clean_text = _normalize_vi_numbers(text)
-                audio = vieneu_client.infer(clean_text, voice="Hải Đăng", temperature=0.35, top_p=0.9)
-                vieneu_client.save(audio, str(vo_wav))
-                if vo_wav.exists() and vo_wav.stat().st_size > 0:
-                    vo_entries.append((vo_wav, delay_ms))
-                    continue
-            except Exception as exc:
-                print(f"[WARN] VieNeu-TTS failed for phrase {idx}: {exc}")
-
-        vo_mp3 = temp_dir / f"vo_{idx:02d}.mp3"
-        try:
-            subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "edge_tts",
-                    "--voice",
-                    "vi-VN-NamMinhNeural",
-                    "--rate=+12%",
-                    "--text",
-                    text,
-                    "--write-media",
-                    str(vo_mp3),
-                ],
-                check=True,
-            )
-            if vo_mp3.exists() and vo_mp3.stat().st_size > 0:
-                vo_entries.append((vo_mp3, delay_ms))
-        except Exception as exc:
-            print(f"[WARN] edge-tts failed for phrase {idx}: {exc}")
-
-    # 2. Collect Text Hook SFX aligned to each scene's startSec
-    sfx_entries: list[tuple[Path, int]] = []
+    cursor_sec = 0.0
     for idx, scene in enumerate(scenes):
-        sfx_file = sfx_cycle[idx % len(sfx_cycle)]
+        text = str(scene.get("narration", "")).strip()
+        if not text and idx < len(plan.get("captions", [])):
+            words = [
+                str(tok.get("text", "")).strip()
+                for line in plan["captions"][idx].get("lines", [])
+                for tok in line
+                if str(tok.get("text", "")).strip()
+            ]
+            text = " ".join(words)
+
+        planned_dur = max(1.8, float(scene.get("endSec", cursor_sec + 3.0)) - float(scene.get("startSec", cursor_sec)))
+        vo_file: Path | None = None
+        if text:
+            if vieneu_client is not None:
+                vo_wav = temp_dir / f"vo_{idx:02d}.wav"
+                try:
+                    clean_text = _normalize_vi_numbers(text)
+                    audio = vieneu_client.infer(clean_text, voice="Hải Đăng", temperature=0.35, top_p=0.9)
+                    vieneu_client.save(audio, str(vo_wav))
+                    if vo_wav.exists() and vo_wav.stat().st_size > 0:
+                        vo_file = vo_wav
+                except Exception as exc:
+                    print(f"[WARN] VieNeu-TTS failed for scene {idx}: {exc}")
+            if vo_file is None:
+                vo_mp3 = temp_dir / f"vo_{idx:02d}.mp3"
+                try:
+                    subprocess.run(
+                        [sys.executable, "-m", "edge_tts", "--voice", "vi-VN-NamMinhNeural", "--rate=+12%", "--text", text, "--write-media", str(vo_mp3)],
+                        check=True,
+                    )
+                    if vo_mp3.exists() and vo_mp3.stat().st_size > 0:
+                        vo_file = vo_mp3
+                except Exception as exc:
+                    print(f"[WARN] edge-tts failed for scene {idx}: {exc}")
+
+        if vo_file is not None:
+            spoken_dur = _get_audio_duration(vo_file)
+            scene_dur = max(planned_dur, spoken_dur + 0.35)
+            delay_ms = int(round((cursor_sec + 0.12) * 1000))
+            vo_entries.append((vo_file, delay_ms))
+        else:
+            scene_dur = planned_dur
+
+        scene["startSec"] = round(cursor_sec, 2)
+        scene["endSec"] = round(cursor_sec + scene_dur, 2)
+        if text:
+            scene["narration"] = text
+        cursor_sec += scene_dur
+
+    total_dur = max(cursor_sec, 3.0)
+    # Rebuild word-level captions to match exact spoken scene windows
+    plan["captions"] = []
+    _build_captions_from_scenes(plan)
+    PLAN_PATH.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # 2. Contextual Text Hook SFX aligned to each synced scene startSec
+    sfx_entries: list[tuple[Path, int]] = []
+    for scene in scenes:
+        sfx_file = sfx_map.get(str(scene.get("layout", "")), sfx_dir / "bass_hit.mp3")
         if sfx_file.exists():
             delay_ms = max(0, int(round(float(scene.get("startSec", 0)) * 1000)))
             sfx_entries.append((sfx_file, delay_ms))
 
     # 3. Mix Voiceover + SFX + Ducked BGM -> -14.0 LUFS WAV
-    inputs: list[str] = []
+    inputs: list[str] = ["-f", "lavfi", "-t", f"{total_dur:.3f}", "-i", "anullsrc=r=44100:cl=stereo"]
     filters: list[str] = []
-    idx_counter = 0
-
-    # Base silence track to lock exact duration
-    inputs.extend(["-f", "lavfi", "-t", f"{total_dur:.3f}", "-i", "anullsrc=r=44100:cl=stereo"])
-    base_idx = idx_counter
-    idx_counter += 1
+    idx_counter = 1
+    base_idx = 0
 
     vo_labels: list[str] = []
     for vo_path, delay_ms in vo_entries:
@@ -516,11 +541,12 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
         return None
 
     out_wav = temp_dir / "master_mix_14lufs.wav"
-    filter_complex = (
-        ";".join(filters + [
+    filter_complex = ";".join(
+        filters
+        + [
             f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:duration=first:dropout_transition=0:normalize=0,"
             f"loudnorm=I=-14:TP=-1.5:LRA=11[aout]"
-        ])
+        ]
     )
     subprocess.run(
         ["ffmpeg", "-y", *inputs, "-filter_complex", filter_complex, "-map", "[aout]", "-ar", "44100", "-ac", "2", str(out_wav)],
@@ -536,6 +562,8 @@ def mode_render() -> Path:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     raw_mp4 = OUT_DIR / f"{title}_raw.mp4"
     out_mp4 = OUT_DIR / f"{title}.mp4"
+    # Build TTS + sync scene_plan.json BEFORE rendering Remotion so captions/scenes match voice 100%
+    audio_wav = build_audio_track(plan, OUT_DIR / "audio_tmp")
     concurrency = str(max(1, min(4, os.cpu_count() or 2)))
     run_cmd(
         [
@@ -551,7 +579,6 @@ def mode_render() -> Path:
         ],
         cwd=REMOTION_DIR,
     )
-    audio_wav = build_audio_track(plan, OUT_DIR / "audio_tmp")
     if audio_wav and audio_wav.exists():
         subprocess.run(
             [
