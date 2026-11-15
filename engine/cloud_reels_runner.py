@@ -69,6 +69,9 @@ def send_telegram_video(video_path: Path, caption: str) -> None:
     data = [
         f"--{boundary}\r\nContent-Disposition: form-data; name=\"chat_id\"\r\n\r\n{chat_id}\r\n".encode(),
         f"--{boundary}\r\nContent-Disposition: form-data; name=\"caption\"\r\n\r\n{caption}\r\n".encode(),
+        f"--{boundary}\r\nContent-Disposition: form-data; name=\"width\"\r\n\r\n1080\r\n".encode(),
+        f"--{boundary}\r\nContent-Disposition: form-data; name=\"height\"\r\n\r\n1920\r\n".encode(),
+        f"--{boundary}\r\nContent-Disposition: form-data; name=\"supports_streaming\"\r\n\r\ntrue\r\n".encode(),
         f"--{boundary}\r\nContent-Disposition: form-data; name=\"video\"; filename=\"{video_path.name}\"\r\nContent-Type: video/mp4\r\n\r\n".encode(),
         video_path.read_bytes(),
         f"\r\n--{boundary}--\r\n".encode(),
@@ -829,6 +832,8 @@ def mode_render() -> Path:
                 "aac",
                 "-b:a",
                 "192k",
+                "-movflags",
+                "+faststart",
                 "-shortest",
                 str(out_mp4),
             ],
