@@ -185,6 +185,7 @@ def _extract_json_object(text: str) -> dict:
 
 
 def _call_gemini_json(prompt: str) -> dict:
+    import time
     import requests  # type: ignore
 
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
@@ -197,43 +198,60 @@ def _call_gemini_json(prompt: str) -> dict:
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"responseMimeType": "application/json"},
             }
-            try:
-                print(f"[GEMINI] Calling {model}...")
-                r = requests.post(url, json=payload, timeout=60)
-                if r.status_code == 404:
-                    print(f"[GEMINI] {model} returned 404, trying next model...")
-                    last_err = r.text
-                    continue
-                r.raise_for_status()
-                data = r.json()
-                text = data["candidates"][0]["content"]["parts"][0]["text"]
-                return _extract_json_object(text)
-            except Exception as exc:
-                print(f"[GEMINI] {model} error: {exc}")
-                last_err = exc
+            for retry in range(2):
+                try:
+                    print(f"[GEMINI] Calling {model} (try {retry + 1})...")
+                    r = requests.post(url, json=payload, timeout=60)
+                    if r.status_code == 404:
+                        print(f"[GEMINI] {model} returned 404, skipping...")
+                        last_err = r.text[:300]
+                        break
+                    if r.status_code in (429, 500, 502, 503, 504):
+                        print(f"[GEMINI] {model} HTTP {r.status_code}: {r.text[:200]}")
+                        last_err = f"HTTP {r.status_code}"
+                        time.sleep(4)
+                        continue
+                    r.raise_for_status()
+                    data = r.json()
+                    text = data["candidates"][0]["content"]["parts"][0]["text"]
+                    return _extract_json_object(text)
+                except Exception as exc:
+                    print(f"[GEMINI] {model} error: {exc}")
+                    last_err = exc
+                    time.sleep(2)
 
     for attempt in range(1, 3):
         try:
-            print(f"[POLLINATIONS] Calling free model 'openai' (attempt {attempt})...")
+            print(f"[POLLINATIONS] Calling free model 'openai' POST (attempt {attempt})...")
             r = requests.post(
                 "https://text.pollinations.ai/openai",
                 headers={"Content-Type": "application/json"},
                 json={
                     "model": "openai",
-                    "messages": [
-                        {"role": "system", "content": "Output ONLY valid raw JSON. No markdown, no comments, no trailing commas."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": 0.3,
+                    "messages": [{"role": "user", "content": prompt}],
                 },
                 timeout=90,
             )
-            r.raise_for_status()
+            if not r.ok:
+                print(f"[POLLINATIONS] POST HTTP {r.status_code}: {r.text[:300]}")
+                r.raise_for_status()
             text = r.json()["choices"][0]["message"]["content"]
             return _extract_json_object(text)
         except Exception as exc:
             print(f"[POLLINATIONS] attempt {attempt} error: {exc}")
             last_err = exc
+
+    try:
+        print("[POLLINATIONS] Trying GET fallback...")
+        get_url = f"https://text.pollinations.ai/{urllib.parse.quote(prompt[:1800])}?model=openai&json=true"
+        r = requests.get(get_url, timeout=90)
+        if not r.ok:
+            print(f"[POLLINATIONS] GET HTTP {r.status_code}: {r.text[:300]}")
+            r.raise_for_status()
+        return _extract_json_object(r.text)
+    except Exception as exc:
+        print(f"[POLLINATIONS] GET fallback error: {exc}")
+        last_err = exc
 
     raise RuntimeError(f"All LLM providers (Gemini + Pollinations) failed: {last_err}")
 
