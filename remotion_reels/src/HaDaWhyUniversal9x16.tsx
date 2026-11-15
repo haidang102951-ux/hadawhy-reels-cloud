@@ -128,7 +128,7 @@ const ImpactHook: React.FC<{
     <div
       style={{
         position: "absolute",
-        top: 124,
+        top: 148,
         left: 60,
         right: 60,
         textAlign: "center",
@@ -222,7 +222,10 @@ const ImpactHook: React.FC<{
 };
 
 const WatermarkYear: React.FC<{ text?: string }> = ({ text }) => {
-  if (!text) return null;
+  const clean = String(text || "").trim();
+  if (!clean) return null;
+  // Suppress generic current-year clutter (2023-2029) so only true historical dates show
+  if (/^202[3-9]$/.test(clean)) return null;
   return (
     <div
       style={{
@@ -798,11 +801,17 @@ const SceneStatOdometer: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) =
   const floatY = Math.sin(frame * 0.06) * 10;
   const targetStr = `${Math.round(targetNum).toLocaleString("en-US")}${scene.statSuffix || ""}`;
   const statFontSize = Math.min(144, Math.max(50, Math.floor(860 / Math.max(1, targetStr.length * 0.62))));
+  const numDigits = String(Math.round(targetNum));
+  const rawHero = String(scene.heroText || "").trim();
+  const heroDigits = rawHero.replace(/[^\d]/g, "");
+  const safeOdometerHero =
+    heroDigits && numDigits && (heroDigits === numDigits || rawHero.includes(numDigits.slice(0, 2)))
+      ? "CON SỐ BIẾT NÓI"
+      : rawHero;
 
   return (
     <AbsoluteFill>
-      <WatermarkYear text={scene.yearWatermark} />
-      <ImpactHook eyebrow={scene.eyebrow} heroText={scene.heroText} heroColor={scene.heroColor} />
+      <ImpactHook eyebrow={scene.eyebrow} heroText={safeOdometerHero} heroColor={scene.heroColor} />
       <div
         style={{
           position: "absolute",

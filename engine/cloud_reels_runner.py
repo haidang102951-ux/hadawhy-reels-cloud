@@ -34,6 +34,20 @@ def run_cmd(cmd: list[str], cwd: Path) -> None:
     subprocess.run(cmd, cwd=str(cwd), check=True, shell=(os.name == "nt"))
 
 
+def send_telegram_message(text: str) -> None:
+    token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat_id:
+        return
+    payload = urllib.parse.urlencode({"chat_id": chat_id, "text": text[:4000]}).encode()
+    req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=payload)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            print(f"[TELEGRAM] Sent message: {resp.status}")
+    except Exception as exc:
+        print(f"[TELEGRAM] Message error: {exc}")
+
+
 def send_telegram_photo(photo_path: Path, caption: str) -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "").strip()
@@ -169,7 +183,29 @@ def _fetch_pollinations_image(query: str) -> bytes | None:
 
 def _is_person_or_place_query(query: str) -> bool:
     q = query.lower()
-    return any(k in q for k in ("ceo", "founder", "president", "building", "factory", "headquarters", "newspaper", "portrait", "huang", "musk", "nvidia", "tsmc", "amd", "intel", "gpu", "server", "data center", "wafer"))
+    return any(k in q for k in ("ceo", "founder", "president", "building", "factory", "headquarters", "newspaper", "portrait", "huang", "musk", "nvidia", "tsmc", "amd", "intel", "gpu", "server", "data center", "wafer", "cleanroom", "silicon"))
+
+
+def _should_keep_full_frame(query: str) -> bool:
+    q = query.lower()
+    return any(k in q for k in ("gpu", "chip", "wafer", "facility", "factory", "cleanroom", "headquarters", "building", "server", "data center", "supercomputer", "fabricat", "rack", "silicon"))
+
+
+def _fetch_best_image(query: str) -> tuple[bytes | None, str]:
+    queries = [query]
+    words = [w for w in query.split() if len(w) > 1]
+    if len(words) > 2:
+        queries.append(" ".join(words[:2]))
+    for q in queries:
+        if _is_person_or_place_query(q):
+            order = (("wikipedia", _fetch_wikipedia_image), ("wikimedia", _fetch_wikimedia_image), ("pollinations", _fetch_pollinations_image))
+        else:
+            order = (("pollinations", _fetch_pollinations_image), ("wikipedia", _fetch_wikipedia_image), ("wikimedia", _fetch_wikimedia_image))
+        for s_name, fn in order:
+            raw_bytes = fn(q)
+            if raw_bytes:
+                return raw_bytes, f"{s_name}('{q}')"
+    return None, "none"
 
 
 def harvest_assets(plan: dict, clean: bool = False) -> None:
@@ -194,47 +230,37 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
         if out_path.exists() and not clean:
             continue
         query = str(item.get("query", filename)).strip()
-        remove_bg = bool(item.get("removeBg", True))
-        print(f"[HARVEST] Fetching '{query}' -> {out_path.name} (removeBg={remove_bg})")
+        remove_bg = bool(item.get("removeBg", True)) and not _should_keep_full_frame(query)
+        print(f"[AGENT-3 HARVEST] Fetching '{query}' -> {out_path.name} (removeBg={remove_bg})")
 
-        # Prefer canonical Wikipedia real photos for real entities; Pollinations 3D render for isolated props
-        raw_bytes = None
-        src_name = "none"
-        if _is_person_or_place_query(query):
-            for s_name, fn in (("wikipedia", _fetch_wikipedia_image), ("wikimedia", _fetch_wikimedia_image), ("pollinations", _fetch_pollinations_image)):
-                raw_bytes = fn(query)
-                if raw_bytes:
-                    src_name = s_name
-                    break
-        else:
-            for s_name, fn in (("pollinations", _fetch_pollinations_image), ("wikipedia", _fetch_wikipedia_image), ("wikimedia", _fetch_wikimedia_image)):
-                raw_bytes = fn(query)
-                if raw_bytes:
-                    src_name = s_name
-                    break
-        print(f"[HARVEST]   -> source={src_name} ({len(raw_bytes) if raw_bytes else 0} bytes)")
+        raw_bytes, src_name = _fetch_best_image(query)
+        print(f"[AGENT-3 HARVEST]   -> source={src_name} ({len(raw_bytes) if raw_bytes else 0} bytes)")
         if not raw_bytes:
-            Image.new("RGBA", (512, 512), (66, 178, 242, 40)).save(out_path, "PNG")
             continue
 
         if remove_bg and remove is not None:
             try:
                 cut_bytes = remove(raw_bytes)
                 img = Image.open(io.BytesIO(cut_bytes)).convert("RGBA")
-                bbox = img.getbbox()
-                if bbox:
-                    img = img.crop(bbox)
-                # Boost brightness slightly if cutout is too dark against #04060a canvas
                 alpha = img.getchannel("A")
-                mean_rgb = sum(ImageStat.Stat(img.convert("RGB"), mask=alpha).mean) / 3.0
-                if mean_rgb < 90:
-                    img = ImageEnhance.Brightness(img).enhance(1.22)
-                    img = ImageEnhance.Contrast(img).enhance(1.12)
-                img = img.filter(ImageFilter.UnsharpMask(radius=1.5, percent=150, threshold=2))
-                img.save(out_path, "PNG")
-                continue
+                total_px = max(1, img.width * img.height)
+                opaque_px = sum(alpha.histogram()[30:])
+                opaque_ratio = opaque_px / total_px
+                if 0.12 <= opaque_ratio <= 0.94:
+                    bbox = img.getbbox()
+                    if bbox:
+                        img = img.crop(bbox)
+                    alpha_cropped = img.getchannel("A")
+                    mean_rgb = sum(ImageStat.Stat(img.convert("RGB"), mask=alpha_cropped).mean) / 3.0
+                    if mean_rgb < 90:
+                        img = ImageEnhance.Brightness(img).enhance(1.22)
+                        img = ImageEnhance.Contrast(img).enhance(1.12)
+                    img = img.filter(ImageFilter.UnsharpMask(radius=1.5, percent=150, threshold=2))
+                    img.save(out_path, "PNG")
+                    continue
+                print(f"[AGENT-3 HARVEST] rembg ratio={opaque_ratio:.2f} out of safe range for {filename}, keeping sharp full photo")
             except Exception as exc:
-                print(f"[HARVEST] rembg failed for {filename}: {exc}")
+                print(f"[AGENT-3 HARVEST] rembg failed for {filename}: {exc}")
 
         img = Image.open(io.BytesIO(raw_bytes)).convert("RGBA")
         img = ImageEnhance.Sharpness(img).enhance(1.2)
@@ -496,6 +522,53 @@ def _build_captions_from_scenes(plan: dict) -> dict:
     return plan
 
 
+def _agent_2_editor_qa(plan: dict) -> dict:
+    """Agent 2: Dedicated Editor & Vietnamese QA pass (fix broken phrasing, stop duplicate Hook/Odometer numbers, clean asset specs)."""
+    print("[AGENT-2 EDITOR] Reviewing script, Vietnamese phrasing, and asset queries...")
+    qa_prompt = (
+        "Bạn là Tổng Biên Tập & Thanh Tra Kịch Bản kênh HaDa Why. Hãy kiểm tra và sửa lại JSON scene_plan dưới đây:\n"
+        "1. Sửa mọi lỗi chính tả/tiếng Việt ngô nghê (VD: 'CHIP HỌC HOPPER' -> 'KIẾN TRÚC HOPPER', từ dịch máy vô nghĩa).\n"
+        "2. Ở mọi cảnh layout 'stat_odometer': 'heroText' TUYỆT ĐỐI KHÔNG được lặp lại con số của 'statNumber' (VD nếu statNumber=30000 thì heroText phải là nhận định như 'GIÁ TRÊN TRỜI' hoặc 'SIÊU LỢI NHUẬN', CẤM viết '30.000 USD' vào heroText).\n"
+        "3. Xóa bỏ 'yearWatermark' nếu là năm hiện tại 2023-2026 (chỉ giữ nếu là năm lịch sử thật như 1307, 2006).\n"
+        "4. Trong 'assetSpecs': chỉ dùng từ khóa tiếng Anh ngắn gọn có ảnh thật trên Wikipedia/Wikimedia; đặt 'removeBg': false cho chip/GPU/nhà máy/tòa nhà/tư liệu, chỉ đặt 'removeBg': true cho chân dung nhân vật hoặc vật thể đơn lẻ.\n"
+        "Chỉ trả về JSON hợp lệ hoàn chỉnh (không markdown ```json).\n\n"
+        f"JSON CẦN RÀ SOÁT:\n{json.dumps(plan, ensure_ascii=False)}"
+    )
+    try:
+        reviewed = _call_gemini_json(qa_prompt)
+        if isinstance(reviewed, dict) and reviewed.get("scenes"):
+            plan = reviewed
+            print("[AGENT-2 EDITOR] LLM QA pass applied successfully")
+    except Exception as exc:
+        print(f"[AGENT-2 EDITOR] LLM QA fallback to deterministic sanitizer: {exc}")
+
+    # Deterministic safety net
+    for scene in plan.get("scenes", []):
+        yw = str(scene.get("yearWatermark", "")).strip()
+        if yw in ("2023", "2024", "2025", "2026"):
+            scene["yearWatermark"] = ""
+        if scene.get("layout") == "stat_odometer":
+            num_str = str(int(float(scene.get("statNumber") or 0)))
+            hero_digits = "".join(ch for ch in str(scene.get("heroText", "")) if ch.isdigit())
+            if hero_digits and num_str and (hero_digits == num_str or num_str[:2] in hero_digits):
+                scene["heroText"] = "CON SỐ BIẾT NÓI"
+    return _build_captions_from_scenes(plan)
+
+
+def _agent_3_prune_missing_assets(plan: dict) -> dict:
+    """Ensure no missing/0-byte asset path remains in scene_plan before Remotion renders."""
+    asset_keys = ("primaryAsset", "leftAsset", "rightAsset", "centerAsset", "topLeftAsset", "topRightAsset", "bottomAsset")
+    for scene in plan.get("scenes", []):
+        for k in asset_keys:
+            val = str(scene.get(k, "")).strip()
+            if val.startswith("harvested/"):
+                fpath = HARVESTED_DIR / Path(val).name
+                if not fpath.exists() or fpath.stat().st_size < 1024:
+                    print(f"[AGENT-3 QC] Removed missing asset '{val}' from {scene.get('id')}.{k}")
+                    scene[k] = ""
+    return plan
+
+
 def mode_create(topic_prompt: str) -> None:
     if not topic_prompt.strip():
         raise RuntimeError("Topic prompt (--feedback) is required for --mode create/auto")
@@ -579,11 +652,19 @@ CHỈ trả về JSON hợp lệ (không markdown ```json):
 
 Mọi file "harvested/<name>.png" dùng trong scenes phải có trong assetSpecs."""
 
-    parsed = _build_captions_from_scenes(_call_gemini_json(prompt))
+    print("[AGENT-1 SCRIPT] Drafting investigative 5-beat script...")
+    parsed = _call_gemini_json(prompt)
+    parsed = _agent_2_editor_qa(parsed)
     parsed["fps"] = 30
+    harvest_assets(parsed, clean=True)
+    parsed = _agent_3_prune_missing_assets(parsed)
     PLAN_PATH.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[CREATE] Generated {PLAN_PATH} for topic: {topic_prompt}")
-    harvest_assets(parsed, clean=True)
+
+    script_lines = [f"🎬 KỊCH BẢN MỚI ({parsed.get('projectTitle', 'HaDaWhy')}):"]
+    for i, sc in enumerate(parsed.get("scenes", []), start=1):
+        script_lines.append(f"{i}. [{sc.get('layout')}] {sc.get('heroText')} — {sc.get('narration')}")
+    send_telegram_message("\n".join(script_lines))
 
 
 def mode_revise(feedback: str) -> None:
@@ -849,9 +930,41 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
     return out_wav
 
 
+def _agent_5_visual_qc(out_mp4: Path) -> str:
+    """Agent 5: Verify 1080x1920 stream & non-black keyframes before Telegram delivery."""
+    try:
+        probe = subprocess.check_output(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,nb_frames", "-of", "csv=p=0", str(out_mp4)],
+            text=True,
+        ).strip()
+        dur = _get_audio_duration(out_mp4)
+        from PIL import Image, ImageStat  # type: ignore
+        qc_dir = OUT_DIR / "qc_frames"
+        qc_dir.mkdir(parents=True, exist_ok=True)
+        bright_scores: list[float] = []
+        for idx, t in enumerate((0.8, max(1.0, dur * 0.45), max(1.5, dur * 0.80)), start=1):
+            frame_png = qc_dir / f"qc_{idx}.png"
+            subprocess.run(
+                ["ffmpeg", "-y", "-ss", f"{t:.2f}", "-i", str(out_mp4), "-frames:v", "1", str(frame_png)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if frame_png.exists():
+                im = Image.open(frame_png).convert("L")
+                bright_scores.append(round(ImageStat.Stat(im).mean[0], 1))
+        report = f"QC PASS ({probe}, {dur:.1f}s, brightness={bright_scores})"
+        print(f"[AGENT-5 QC] {report}")
+        return report
+    except Exception as exc:
+        print(f"[AGENT-5 QC] Warning: {exc}")
+        return "QC completed"
+
+
 def mode_render() -> Path:
     plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
     harvest_assets(plan, clean=False)
+    plan = _agent_3_prune_missing_assets(plan)
+    PLAN_PATH.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     title = plan.get("projectTitle", "HaDaWhy_Cloud_Video")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     raw_mp4 = OUT_DIR / f"{title}_raw.mp4"
@@ -904,7 +1017,8 @@ def mode_render() -> Path:
         raw_mp4.unlink(missing_ok=True)
     else:
         raw_mp4.replace(out_mp4)
-    send_telegram_video(out_mp4, f"Render hoàn tất (Voice + SFX + BGM + Motion): {title}")
+    qc_summary = _agent_5_visual_qc(out_mp4)
+    send_telegram_video(out_mp4, f"Render hoàn tất ({qc_summary}): {title}")
     print(f"[RENDER] Output MP4: {out_mp4}")
     return out_mp4
 

@@ -13,14 +13,14 @@ export const ChannelWatermark9x16: React.FC<ChannelWatermark9x16Props> = ({
 
   return (
     <>
-      {/* Layer 1: Top-Left Safe Corner Channel Identity (bottom ends at Y = 97.6px, strictly above top: 108px captions) */}
+      {/* Layer 1: Top-Left Safe Corner Channel Identity inside 9:16 Safe Zone */}
       <div
         style={{
           position: "absolute",
-          top: 20,
+          top: 52,
           left: 40,
-          width: 136,
-          opacity: 0.88,
+          width: 132,
+          opacity: 0.9,
           zIndex: 60,
           pointerEvents: "none",
           filter: "drop-shadow(0 3px 10px rgba(0, 0, 0, 0.85))",
