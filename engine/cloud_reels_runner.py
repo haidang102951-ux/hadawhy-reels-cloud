@@ -960,6 +960,99 @@ def _agent_5_visual_qc(out_mp4: Path) -> str:
         return "QC completed"
 
 
+def _agent_6_thumbnail_and_seo(plan: dict) -> None:
+    """Agent 6: Render 9:16 ThumbnailCover9x16 + write viral Title/SEO Hashtags and send to Telegram."""
+    try:
+        scenes = plan.get("scenes", [])
+        harvested_files = sorted(
+            [f"harvested/{p.name}" for p in HARVESTED_DIR.glob("*.png") if p.stat().st_size > 1024]
+        )
+        if not harvested_files:
+            print("[AGENT-6 THUMB/SEO] No harvested images available, skipping thumbnail.")
+            return
+
+        hero_img = ""
+        bg_img = ""
+        sec_img = ""
+        for sc in scenes:
+            for k in ("primaryAsset", "leftAsset", "topLeftAsset"):
+                val = str(sc.get(k, "")).strip()
+                if val.startswith("harvested/") and (HARVESTED_DIR / Path(val).name).exists():
+                    if not hero_img:
+                        hero_img = val
+                    elif not bg_img and val != hero_img:
+                        bg_img = val
+                    elif not sec_img and val not in (hero_img, bg_img):
+                        sec_img = val
+        hero_img = hero_img or harvested_files[0]
+        bg_img = bg_img or harvested_files[-1]
+        sec_img = sec_img or hero_img
+
+        first_hero = str(scenes[0].get("heroText", "BÍ MẬT CHẤN ĐỘNG") if scenes else "BÍ MẬT CHẤN ĐỘNG").upper()
+        second_hero = str(scenes[1].get("heroText", "SỰ THẬT ĐẰNG SAU") if len(scenes) > 1 else "SỰ THẬT ĐẰNG SAU").upper()
+        title = plan.get("projectTitle", "HaDaWhy_Cloud_Video")
+
+        seo_prompt = (
+            "Bạn là Chuyên gia Thumbnail & SEO kênh HaDa Why (@hadawhy). Dựa trên kịch bản sau, hãy trả về JSON gồm:\n"
+            '{"line1": "DÒNG 1 NGẮN 3-5 TỪ IN HOA", "line2": "DÒNG 2 NGẮN 3-5 TỪ IN HOA", '
+            '"viralTitle": "Tiêu đề Reels/TikTok/Shorts giật tò mò", "hashtags": "#HaDaWhy #KinhTe #CongNghe ..."}\n'
+            f"Kịch bản: {json.dumps([s.get('narration', '') for s in scenes], ensure_ascii=False)}"
+        )
+        line1, line2 = first_hero, second_hero
+        viral_title = f"{first_hero} — {second_hero}"
+        hashtags = "#HaDaWhy #BiMatThuongHieu #KienThucThuVi #ReelsVN"
+        try:
+            seo = _call_gemini_json(seo_prompt)
+            line1 = str(seo.get("line1") or line1).upper()
+            line2 = str(seo.get("line2") or line2).upper()
+            viral_title = str(seo.get("viralTitle") or viral_title)
+            hashtags = str(seo.get("hashtags") or hashtags)
+        except Exception as exc:
+            print(f"[AGENT-6 THUMB/SEO] LLM SEO fallback: {exc}")
+
+        thumb_props = {
+            "backgroundPhotoSrc": bg_img,
+            "backgroundBlurPx": 0,
+            "backgroundScale": 1.0,
+            "backgroundObjectPosition": "50% 50%",
+            "backgroundBrightness": 0.85,
+            "backgroundContrast": 1.15,
+            "backgroundSaturate": 1.0,
+            "heroSubjectSrc": hero_img,
+            "mysteryOrSecondarySrc": sec_img,
+            "headlineLine1": line1,
+            "headlineLine2": line2,
+            "brandLogoSrc": "brand/hadawhy_logo.png",
+            "glowAccentColor": "#E11D2E",
+            "headlineLine1Color": "#42B2F2",
+            "headlineLine2Color": "#FFFFFF",
+            "heroBwHighContrast": True,
+            "mysterySilhouetteMode": False,
+            "mysterySymbol": "!",
+        }
+        props_file = OUT_DIR / "thumb_props.json"
+        props_file.write_text(json.dumps(thumb_props, ensure_ascii=False), encoding="utf-8")
+        thumb_png = OUT_DIR / f"{title}_thumb_9x16.png"
+        run_cmd(
+            [
+                "npx",
+                "remotion",
+                "still",
+                "src/index.ts",
+                "ThumbnailCover9x16",
+                str(thumb_png),
+                f"--props={props_file}",
+                "--gl=angle",
+            ],
+            cwd=REMOTION_DIR,
+        )
+        if thumb_png.exists():
+            send_telegram_photo(thumb_png, f"🖼️ THUMBNAIL 9:16 & SEO\n📌 {viral_title}\n{hashtags}")
+            print(f"[AGENT-6 THUMB/SEO] Generated and sent {thumb_png.name}")
+    except Exception as exc:
+        print(f"[AGENT-6 THUMB/SEO] Warning: {exc}")
+
+
 def mode_render() -> Path:
     plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
     harvest_assets(plan, clean=False)
@@ -1019,6 +1112,7 @@ def mode_render() -> Path:
         raw_mp4.replace(out_mp4)
     qc_summary = _agent_5_visual_qc(out_mp4)
     send_telegram_video(out_mp4, f"Render hoàn tất ({qc_summary}): {title}")
+    _agent_6_thumbnail_and_seo(plan)
     print(f"[RENDER] Output MP4: {out_mp4}")
     return out_mp4
 
