@@ -255,22 +255,24 @@ def _call_openai_compat_json(url: str, api_key: str, model: str, prompt: str, la
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
     try:
         print(f"[{label}] Calling {model}...")
-        r = requests.post(
-            url,
-            headers=headers,
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.4,
-                "max_tokens": 4096,
-            },
-            timeout=45,
-        )
+        payload: dict = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.35,
+            "max_tokens": 4096,
+        }
+        if "openrouter" in url:
+            payload["response_format"] = {"type": "json_object"}
+        r = requests.post(url, headers=headers, json=payload, timeout=45)
         if not r.ok:
             print(f"[{label}] {model} HTTP {r.status_code}: {r.text[:220]}")
             return None
-        text = r.json()["choices"][0]["message"]["content"]
-        return _extract_json_object(text)
+        msg = (r.json().get("choices") or [{}])[0].get("message") or {}
+        text = msg.get("content") or msg.get("reasoning") or ""
+        if not str(text).strip():
+            print(f"[{label}] {model} returned empty content")
+            return None
+        return _extract_json_object(str(text))
     except Exception as exc:
         print(f"[{label}] {model} error: {exc}")
         return None
@@ -286,6 +288,7 @@ def _call_gemini_json(prompt: str) -> dict:
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if openrouter_key:
         for or_model in (
+            "nvidia/nemotron-3.5-lightning:free",
             "google/gemma-4-31b-it:free",
             "nvidia/nemotron-3-ultra-550b-a55b:free",
             "openrouter/free",
@@ -397,9 +400,24 @@ def _pick_word_color(word_upper: str, accent: str, idx: int, total: int) -> str:
 
 
 def _build_captions_from_scenes(plan: dict) -> dict:
-    """Normalize scene defaults (non-empty Text Hook) and emit dynamic phrase-by-phrase captions."""
+    """Normalize scene defaults (non-empty Text Hook), validate asset paths, and emit rolling captions."""
+    import difflib
+
+    spec_names = [
+        Path(str(item.get("filename", ""))).stem + ".png"
+        for item in plan.get("assetSpecs", [])
+        if item.get("filename")
+    ]
+    asset_keys = ("primaryAsset", "leftAsset", "rightAsset", "centerAsset", "topLeftAsset", "topRightAsset", "bottomAsset")
     accent_cycle = ["#FFE600", "#FF4D5A", "#42B2F2"]
     for idx, scene in enumerate(plan.get("scenes", []), start=1):
+        for k in asset_keys:
+            val = str(scene.get(k, "")).strip()
+            if val.startswith("harvested/") and spec_names:
+                fname = Path(val).name
+                if fname not in spec_names:
+                    match = difflib.get_close_matches(fname, spec_names, n=1, cutoff=0.45)
+                    scene[k] = f"harvested/{match[0]}" if match else ""
         scene.setdefault("id", f"scene_{idx}")
         narration = str(scene.get("narration", "")).strip()
         if not scene.get("eyebrow"):
