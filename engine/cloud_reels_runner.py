@@ -479,7 +479,15 @@ def mode_create(topic_prompt: str) -> None:
         return
 
     prompt = f"""Bạn là Đạo diễn Điều tra kênh HaDa Why (@hadawhy) — chuyên làm video ngắn 9:16 bóc trần sự thật kinh tế/công nghệ với DỮ LIỆU THẬT, CON SỐ CỤ THỂ và CƠ CHẾ SÂU SẮC.
-Hãy sáng tác JSON scene_plan chất lượng cao cho yêu cầu: "{topic_prompt}"
+
+HÃY HỌC ĐÚNG PHONG CÁCH 2 VIDEO MẪU ĐỈNH CAO CỦA KÊNH (MasterShowcase20s - vụ kiện thuê máy bay 250 triệu đô & Friday13Origins - bóc trần lịch sử Thứ Sáu Ngày 13):
+- Mẫu lời thoại & nhịp điệu:
+  * Cảnh 1 (Hook nghịch lý ngay giây 0): "Từ 4 tàu bay thuê, số nợ bất ngờ vọt lên 250 triệu đô la!" -> heroText: "250 TRIỆU ĐÔ"
+  * Cảnh 2 (Cơ chế tài chính/kỹ thuật): "Ngân hàng cắt hợp đồng, bán khoản nợ thẳng sang cho quỹ ngoại ở Anh." -> layout: "causal_chain"
+  * Cảnh 3 (Bằng chứng lịch sử/tư liệu): "Vụ kiện kéo dài từ Việt Nam sang tận Tòa Tối Cao Luân Đôn." -> layout: "archival_proof", stampText: "XÁC THỰC 100%"
+  * Cảnh 4 (Chốt hạ bản chất WHY): "Một bài học đắt giá khi bước chân ra sân chơi quốc tế!" -> heroText: "LUẬT CHƠI NGẦM"
+
+Hãy sáng tác JSON scene_plan chất lượng tương đương cho yêu cầu: "{topic_prompt}"
 
 NGUYÊN TẮC NỘI DUNG & TEXT HOOK BẮT BUỘC:
 - Viết đủ 5 cảnh giàu thông tin (hoặc theo đúng thời lượng yêu cầu), theo 5 nhịp điều tra gây tò mò tột độ:

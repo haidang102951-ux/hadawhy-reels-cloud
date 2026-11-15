@@ -296,9 +296,11 @@ const InfoTagsRow: React.FC<{ tags?: string[]; accent?: string; top?: number }> 
 const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const enter = spring({ frame: frame - 3, fps, config: { damping: 12, stiffness: 150 } });
+  const enter = spring({ frame: frame - 2, fps, config: { damping: 12, stiffness: 130, mass: 0.85 } });
+  const swoopX = interpolate(enter, [0, 1], [-220, 0]);
+  const swoopRot = interpolate(enter, [0, 0.7, 1], [10, -5, 0]);
   const floatY = Math.sin(frame * 0.065) * 14;
-  const tiltDeg = Math.sin(frame * 0.04) * 2.4;
+  const tiltDeg = Math.sin(frame * 0.04) * 2.4 + swoopRot;
   const ringRot = frame * 0.6;
   const shadowScale = interpolate(floatY, [-14, 14], [0.85, 1.06]);
   const accent = scene.heroColor || "#42B2F2";
@@ -340,7 +342,7 @@ const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            transform: `perspective(1200px) translateY(${floatY}px) rotateZ(${tiltDeg}deg) scale(${interpolate(enter, [0, 1], [0.78, 1])})`,
+            transform: `perspective(1200px) translateX(${swoopX}px) translateY(${floatY}px) rotateZ(${tiltDeg}deg) scale(${interpolate(enter, [0, 1], [0.76, 1])})`,
             opacity: enter,
             zIndex: 12,
           }}
@@ -1159,6 +1161,9 @@ const SceneMotionGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const punch = spring({ frame, fps, config: { damping: 14, stiffness: 220 } });
   const camScale = interpolate(punch, [0, 1], [1.1, 1]);
   const camShiftY = interpolate(punch, [0, 1], [28, 0]);
+  const shakeDecay = frame < 10 ? Math.exp(-frame * 0.32) : 0;
+  const shakeX = Math.sin(frame * 2.9) * 10 * shakeDecay;
+  const shakeY = Math.cos(frame * 3.3) * 8 * shakeDecay;
   const flashOpacity = interpolate(frame, [0, 7], [0.24, 0], { extrapolateRight: "clamp" });
   const exitOpacity = interpolate(
     frame,
@@ -1168,7 +1173,7 @@ const SceneMotionGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
   );
 
   return (
-    <AbsoluteFill style={{ transform: `translateY(${camShiftY}px) scale(${camScale})`, opacity: exitOpacity }}>
+    <AbsoluteFill style={{ transform: `translate(${shakeX}px, ${camShiftY + shakeY}px) scale(${camScale})`, opacity: exitOpacity }}>
       {children}
       {flashOpacity > 0.01 ? (
         <AbsoluteFill
