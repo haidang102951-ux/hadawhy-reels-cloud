@@ -270,8 +270,8 @@ export const KineticWordCaption: React.FC<KineticWordCaptionProps> = ({
                   color: word.color || "#FFFFFF",
                   opacity,
                   transform: `translateY(${translateY}px) scale(${scale})`,
-                  // ZERO-BOX: No background rectangle! Pure 3D extruded stroke + deep shadow
-                  WebkitTextStroke: "9px #06080E",
+                  // ZERO-BOX: No background rectangle! Pure crisp 3D stroke + deep shadow
+                  WebkitTextStroke: "5px #06080E",
                   paintOrder: "stroke fill",
                   textShadow: isSpeakingNow
                     ? `0px 6px 0px #06080E, 0px 14px 28px rgba(0,0,0,0.92), 0px 0px 26px ${word.color || "#FFFFFF"}88`

@@ -97,26 +97,26 @@ const FONT_CSS = `
 }
 `;
 
-const FONT_HEADING = `'BeVietnamProBlack', 'KanitBlack', sans-serif`;
-const FONT_BODY = `'BeVietnamProExtraBold', 'BeVietnamProBlack', sans-serif`;
+const FONT_HEADING = `BeVietnamProBlack, sans-serif`;
+const FONT_BODY = `BeVietnamProExtraBold, BeVietnamProBlack, sans-serif`;
 
 const ImpactHook: React.FC<{
   eyebrow?: string;
   heroText?: string;
   heroColor?: string;
   subNote?: string;
-}> = ({ eyebrow = "", heroText = "", heroColor = "#ff3b3b", subNote }) => {
-  const safeHero = String(heroText || "");
-  const safeEyebrow = String(eyebrow || "");
+}> = ({ eyebrow = "", heroText = "", heroColor = "#FFE600", subNote }) => {
+  const safeHero = String(heroText || "").toUpperCase();
+  const safeEyebrow = String(eyebrow || "").toUpperCase();
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const slam = spring({ frame, fps, config: { damping: 11, stiffness: 250 } });
-  const scale = interpolate(slam, [0, 1], [1.85, 1]);
+  const slam = spring({ frame, fps, config: { damping: 12, stiffness: 260 } });
+  const scale = interpolate(slam, [0, 1], [1.75, 1]);
   const opacity = interpolate(frame, [0, 5], [0, 1], { extrapolateRight: "clamp" });
-  const shakeDecay = interpolate(frame, [0, 12], [1, 0], { extrapolateRight: "clamp" });
-  const shakeX = Math.sin(frame * 2.7) * 7 * shakeDecay;
-  const shakeY = Math.cos(frame * 3.1) * 5 * shakeDecay;
-  const sweepPos = interpolate(frame, [10, 48], [-120, 220], {
+  const shakeDecay = interpolate(frame, [0, 10], [1, 0], { extrapolateRight: "clamp" });
+  const shakeX = Math.sin(frame * 2.7) * 6 * shakeDecay;
+  const shakeY = Math.cos(frame * 3.1) * 4 * shakeDecay;
+  const sweepPos = interpolate(frame, [10, 46], [-120, 220], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -125,40 +125,61 @@ const ImpactHook: React.FC<{
     <div
       style={{
         position: "absolute",
-        top: 130,
-        left: 56,
-        right: 56,
+        top: 124,
+        left: 60,
+        right: 60,
         textAlign: "center",
         zIndex: 25,
         opacity,
         transform: `translate(${shakeX}px, ${shakeY}px) scale(${scale})`,
       }}
     >
-      <div
-        style={{
-          fontFamily: FONT_BODY,
-          fontSize: 38,
-          fontWeight: 900,
-          letterSpacing: 2.5,
-          color: "#FFFFFF",
-          textShadow: "0 4px 18px rgba(0,0,0,0.9)",
-        }}
-      >
-        {safeEyebrow}
-      </div>
+      {safeEyebrow ? (
+        <div
+          style={{
+            display: "inline-flex",
+            flexDirection: "column",
+            alignItems: "center",
+            marginBottom: 8,
+          }}
+        >
+          <div
+            style={{
+              fontFamily: FONT_BODY,
+              fontSize: 30,
+              fontWeight: 800,
+              letterSpacing: 4.5,
+              color: "#E2E8F0",
+              textShadow: "0 3px 12px rgba(0,0,0,0.95)",
+            }}
+          >
+            {safeEyebrow}
+          </div>
+          <div
+            style={{
+              marginTop: 6,
+              width: 110,
+              height: 3,
+              borderRadius: 2,
+              background: `linear-gradient(90deg, transparent, ${heroColor}, transparent)`,
+            }}
+          />
+        </div>
+      ) : null}
       <div
         style={{
           position: "relative",
-          display: "inline-block",
+          display: "block",
           fontFamily: FONT_HEADING,
-          fontSize: safeHero.length > 10 ? 78 : 110,
+          fontSize: safeHero.length > 14 ? 66 : safeHero.length > 9 ? 78 : 98,
           fontWeight: 900,
-          lineHeight: 1.02,
-          marginTop: 6,
+          lineHeight: 1.06,
+          letterSpacing: "-0.02em",
+          marginTop: 4,
           color: heroColor,
-          WebkitTextStroke: "12px #09090b",
+          WebkitTextStroke: "5px #07090E",
           paintOrder: "stroke fill",
-          filter: `drop-shadow(0 0 28px ${heroColor}66) drop-shadow(0 10px 24px rgba(0,0,0,0.92))`,
+          textShadow: `0 5px 0 #07090E, 0 14px 28px rgba(0,0,0,0.95), 0 0 32px ${heroColor}55`,
         }}
       >
         {safeHero}
@@ -166,9 +187,10 @@ const ImpactHook: React.FC<{
           style={{
             position: "absolute",
             inset: 0,
-            background: `linear-gradient(110deg, transparent ${sweepPos - 25}%, rgba(255,255,255,0.65) ${sweepPos}%, transparent ${sweepPos + 25}%)`,
+            background: `linear-gradient(110deg, transparent ${sweepPos - 22}%, rgba(255,255,255,0.72) ${sweepPos}%, transparent ${sweepPos + 22}%)`,
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
+            WebkitTextStroke: "0px transparent",
             pointerEvents: "none",
           }}
         >
@@ -180,14 +202,14 @@ const ImpactHook: React.FC<{
           style={{
             marginTop: 14,
             fontFamily: FONT_BODY,
-            fontSize: 30,
-            fontWeight: 900,
-            color: "#facc15",
-            letterSpacing: 1.4,
-            textShadow: "0 4px 14px rgba(0,0,0,0.95)",
+            fontSize: 28,
+            fontWeight: 800,
+            color: "#FFFFFF",
+            letterSpacing: 1.8,
+            textShadow: "0 4px 14px rgba(0,0,0,0.98)",
           }}
         >
-          {subNote}
+          {String(subNote).toUpperCase()}
         </div>
       ) : null}
     </div>

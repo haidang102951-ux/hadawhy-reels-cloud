@@ -92,8 +92,8 @@ def _fetch_wikimedia_image(query: str) -> bytes | None:
         "gsrsearch": query,
         "gsrlimit": "6",
         "prop": "imageinfo",
-        "iiprop": "url|mime",
-        "iiurlwidth": "1024",
+        "iiprop": "url|mime|size",
+        "iiurlwidth": "1280",
         "format": "json",
     }
     try:
@@ -103,10 +103,12 @@ def _fetch_wikimedia_image(query: str) -> bytes | None:
         for page in pages.values():
             info = (page.get("imageinfo") or [{}])[0]
             mime = info.get("mime", "")
+            width = int(info.get("width") or 0)
+            height = int(info.get("height") or 0)
             img_url = info.get("thumburl") or info.get("url")
-            if img_url and mime in ("image/jpeg", "image/png", "image/webp"):
+            if img_url and mime in ("image/jpeg", "image/png", "image/webp") and min(width, height) >= 500:
                 img_resp = requests.get(img_url, headers=headers, timeout=25)
-                if img_resp.ok and len(img_resp.content) > 5000:
+                if img_resp.ok and len(img_resp.content) > 20000:
                     return img_resp.content
     except Exception as exc:
         print(f"[HARVEST] Wikimedia fallback for '{query}': {exc}")
@@ -116,11 +118,13 @@ def _fetch_wikimedia_image(query: str) -> bytes | None:
 def _fetch_pollinations_image(query: str) -> bytes | None:
     import requests  # type: ignore
 
-    prompt_enc = urllib.parse.quote(f"{query}, clean studio lighting, centered isolated subject, photorealistic, high detail")
-    url = f"https://image.pollinations.ai/prompt/{prompt_enc}?width=1024&height=1024&nologo=true"
+    prompt_enc = urllib.parse.quote(
+        f"{query}, ultra sharp 3D studio product render, isolated on clean dark background, dramatic rim lighting, 8k photorealistic"
+    )
+    url = f"https://image.pollinations.ai/prompt/{prompt_enc}?model=flux&width=1024&height=1024&nologo=true"
     try:
-        r = requests.get(url, timeout=45)
-        if r.ok and len(r.content) > 5000:
+        r = requests.get(url, timeout=60)
+        if r.ok and len(r.content) > 20000:
             return r.content
     except Exception as exc:
         print(f"[HARVEST] Pollinations error for '{query}': {exc}")
@@ -135,7 +139,7 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
     if not specs:
         return
 
-    from PIL import Image  # type: ignore
+    from PIL import Image, ImageEnhance  # type: ignore
     try:
         from rembg import remove  # type: ignore
     except Exception:
@@ -154,7 +158,6 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
 
         raw_bytes = _fetch_wikimedia_image(query) or _fetch_pollinations_image(query)
         if not raw_bytes:
-            # Generate clean transparent placeholder so Remotion never crashes
             Image.new("RGBA", (512, 512), (66, 178, 242, 40)).save(out_path, "PNG")
             continue
 
@@ -165,12 +168,15 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
                 bbox = img.getbbox()
                 if bbox:
                     img = img.crop(bbox)
+                img = ImageEnhance.Sharpness(img).enhance(1.25)
                 img.save(out_path, "PNG")
                 continue
             except Exception as exc:
                 print(f"[HARVEST] rembg failed for {filename}: {exc}")
 
-        Image.open(io.BytesIO(raw_bytes)).convert("RGBA").save(out_path, "PNG")
+        img = Image.open(io.BytesIO(raw_bytes)).convert("RGBA")
+        img = ImageEnhance.Sharpness(img).enhance(1.2)
+        img.save(out_path, "PNG")
 
 
 def _extract_json_object(text: str) -> dict:
@@ -320,8 +326,14 @@ def mode_create(topic_prompt: str) -> None:
     if not topic_prompt.strip():
         raise RuntimeError("Topic prompt (--feedback) is required for --mode create/auto")
 
-    prompt = f"""Bạn là Tổng Đạo Diễn video ngắn dọc 9:16 (60fps) kênh HaDa Why (@hadawhy).
-Hãy sáng tác JSON scene_plan ngắn gọn cho yêu cầu: "{topic_prompt}"
+    prompt = f"""Bạn là Đạo diễn Điều tra kênh HaDa Why (@hadawhy) — chuyên làm video ngắn 9:16 bóc trần sự thật kinh tế/công nghệ với DỮ LIỆU THẬT, CON SỐ CỤ THỂ và CƠ CHẾ SÂU SẮC.
+Hãy sáng tác JSON scene_plan chất lượng cao cho yêu cầu: "{topic_prompt}"
+
+NGUYÊN TẮC NỘI DUNG BẮT BUỘC:
+- Viết đủ 4–5 cảnh (hoặc theo đúng thời lượng yêu cầu), đi theo 5 nhịp giữ chân: (1) Hook nghịch lý/số liệu sốc -> (2) Cơ chế & con số thật -> (3) So sánh đối lập -> (4) Bóc trần bản chất "WHY" -> (5) Kết luận đắt giá.
+- Lời thoại (`narration`) phải chứa KIẾN THỨC THẬT, tên riêng thật, con số thật (không nói chung chung sáo rỗng).
+- `eyebrow` ngắn gọn 2–4 từ, `heroText` cực đắt giá 1–3 từ hoặc con số lớn (VD: "90% THỊ PHẦN", "30.000 USD", "ĐỘC QUYỀN CUDA").
+- TRONG `assetSpecs`: CHỈ tìm ảnh VẬT THỂ / NHÂN VẬT / SẢN PHẨM THẬT ngoài đời bằng tiếng Anh (VD: "Nvidia H100 GPU chip", "Jensen Huang CEO", "gold shovel", "semiconductor wafer"). TUYỆT ĐỐI KHÔNG tìm ảnh "chart", "odometer", "button" (vì hệ thống đã tự vẽ biểu đồ và odometer sắc nét).
 
 CHỈ trả về JSON hợp lệ (không markdown ```json):
 {{
