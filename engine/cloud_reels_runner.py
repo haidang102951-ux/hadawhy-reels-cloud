@@ -666,6 +666,8 @@ def mode_render() -> Path:
             "HaDaWhyUniversal9x16",
             str(raw_mp4),
             "--codec=h264",
+            "--image-format=jpeg",
+            "--jpeg-quality=90",
             f"--concurrency={concurrency}",
             "--gl=angle",
         ],

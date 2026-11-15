@@ -351,7 +351,7 @@ const SceneHeroProp: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
               height: 620,
               maxWidth: 820,
               objectFit: "contain",
-              filter: `drop-shadow(0 0 24px ${accent}55) drop-shadow(0 30px 44px rgba(0,0,0,0.92))`,
+              filter: "drop-shadow(0 20px 30px rgba(0,0,0,0.88))",
             }}
           />
           <div
@@ -1034,8 +1034,7 @@ const SceneCausalChain: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) =>
             height: 720,
             marginLeft: -360,
             objectFit: "contain",
-            opacity: 0.16,
-            filter: "blur(1px) drop-shadow(0 0 28px rgba(66,178,242,0.4))",
+            opacity: 0.14,
             pointerEvents: "none",
             zIndex: 6,
           }}
@@ -1210,7 +1209,6 @@ const AtmosphericMotes: React.FC = () => {
             borderRadius: "50%",
             background: idx % 3 === 0 ? "#42B2F2" : "#FFFFFF",
             opacity: m.alpha,
-            boxShadow: `0 0 ${m.size * 3}px ${idx % 3 === 0 ? "#42B2F2" : "#FFFFFF"}`,
           }}
         />
       ))}

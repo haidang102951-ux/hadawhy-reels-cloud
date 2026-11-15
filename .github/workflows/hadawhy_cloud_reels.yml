@@ -48,13 +48,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2t64 || true
 
-      - name: Cache HuggingFace & rembg models
+      - name: Cache HuggingFace, rembg & Remotion browser
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/huggingface
             ~/.u2net
-          key: ${{ runner.os }}-ai-models-v1
+            remotion_reels/node_modules/.remotion
+          key: ${{ runner.os }}-ai-models-v2
 
       - name: Install Node & Python dependencies
         run: |
