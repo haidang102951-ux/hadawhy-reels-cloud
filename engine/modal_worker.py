@@ -68,6 +68,7 @@ def run_pipeline_gpu(
     gemini_key: str = "",
     deepseek_key: str = "",
     serper_key: str = "",
+    gh_models_token: str = "",
     tg_token: str = "",
     tg_chat_id: str = "",
 ) -> int:
@@ -97,6 +98,8 @@ def run_pipeline_gpu(
         env["DEEPSEEK_API_KEY"] = deepseek_key
     if serper_key:
         env["SERPER_API_KEY"] = serper_key
+    if gh_models_token:
+        env["GH_MODELS_TOKEN"] = gh_models_token
     if tg_token:
         env["TELEGRAM_BOT_TOKEN"] = tg_token
     if tg_chat_id:
@@ -121,6 +124,7 @@ def main(mode: str = "auto", feedback: str = "") -> None:
         gemini_key=os.getenv("GEMINI_API_KEY", ""),
         deepseek_key=os.getenv("DEEPSEEK_API_KEY", ""),
         serper_key=os.getenv("SERPER_API_KEY", ""),
+        gh_models_token=os.getenv("GH_MODELS_TOKEN", ""),
         tg_token=os.getenv("TELEGRAM_BOT_TOKEN", ""),
         tg_chat_id=os.getenv("TELEGRAM_CHAT_ID", ""),
     )

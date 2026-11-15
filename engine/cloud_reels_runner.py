@@ -198,11 +198,61 @@ _STOCK_WATERMARK_DOMAINS = (
 )
 
 
+def _vision_pick_best_image(query: str, candidates: list[bytes]) -> bytes:
+    """Use GitHub Models gpt-4o-mini Vision to pick the cleanest, exact-matching real photo among Google Image candidates."""
+    if len(candidates) <= 1:
+        return candidates[0]
+    gh_token = os.getenv("GH_MODELS_TOKEN", "").strip()
+    if not gh_token:
+        return candidates[0]
+    try:
+        import base64
+        import requests  # type: ignore
+        from PIL import Image  # type: ignore
+
+        content: list[dict] = [
+            {
+                "type": "text",
+                "text": (
+                    f"Pick the single best real photograph for query: '{query}'. "
+                    "Reject any image with watermarks, big text overlays, cartoons, or wrong subject. "
+                    f"Reply ONLY with the single integer index (0 to {len(candidates) - 1})."
+                ),
+            }
+        ]
+        for idx, raw in enumerate(candidates):
+            with Image.open(io.BytesIO(raw)) as im:
+                thumb = im.convert("RGB")
+                thumb.thumbnail((384, 384))
+                buf = io.BytesIO()
+                thumb.save(buf, "JPEG", quality=75)
+                b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+
+        r = requests.post(
+            "https://models.github.ai/inference/chat/completions",
+            headers={"Authorization": f"Bearer {gh_token}", "Content-Type": "application/json"},
+            json={"model": "openai/gpt-4o-mini", "messages": [{"role": "user", "content": content}], "max_tokens": 8, "temperature": 0},
+            timeout=25,
+        )
+        if r.ok:
+            ans = str(r.json()["choices"][0]["message"]["content"]).strip()
+            for ch in ans:
+                if ch.isdigit() and int(ch) < len(candidates):
+                    pick = int(ch)
+                    print(f"[VISION] Picked candidate #{pick}/{len(candidates)} for '{query}'")
+                    return candidates[pick]
+    except Exception as exc:
+        print(f"[VISION] Fallback to candidate #0 for '{query}': {exc}")
+    return candidates[0]
+
+
 def _fetch_serper_google_image(query: str) -> bytes | None:
     serper_key = os.getenv("SERPER_API_KEY", "").strip()
     if not serper_key:
         return None
     import requests  # type: ignore
+    from PIL import Image  # type: ignore
 
     try:
         r = requests.post(
@@ -215,6 +265,7 @@ def _fetch_serper_google_image(query: str) -> bytes | None:
             print(f"[SERPER] HTTP {r.status_code}: {r.text[:200]}")
             return None
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0 Safari/537.36"}
+        valid_candidates: list[bytes] = []
         for img in r.json().get("images", []):
             img_url = str(img.get("imageUrl") or "").strip()
             w = int(img.get("imageWidth") or 0)
@@ -225,12 +276,18 @@ def _fetch_serper_google_image(query: str) -> bytes | None:
             if low.endswith((".svg", ".tif", ".tiff", ".gif")) or min(w, h) < 400:
                 continue
             try:
-                resp = requests.get(img_url, headers=headers, timeout=15)
+                resp = requests.get(img_url, headers=headers, timeout=12)
                 ctype = resp.headers.get("content-type", "").lower()
                 if resp.ok and len(resp.content) > 20000 and ctype.startswith("image/") and "svg" not in ctype:
-                    return resp.content
+                    with Image.open(io.BytesIO(resp.content)) as test_im:
+                        test_im.verify()
+                    valid_candidates.append(resp.content)
+                    if len(valid_candidates) >= 3:
+                        break
             except Exception:
                 continue
+        if valid_candidates:
+            return _vision_pick_best_image(query, valid_candidates)
     except Exception as exc:
         print(f"[SERPER] Google Images error for '{query}': {exc}")
     return None
@@ -383,6 +440,20 @@ def _call_gemini_json(prompt: str, require_scenes: bool = True) -> dict:
     import requests  # type: ignore
 
     last_err = None
+
+    # 0. GitHub Models (openai/gpt-4o-mini) - fast, reliable, Vietnamese + JSON
+    gh_token = os.getenv("GH_MODELS_TOKEN", "").strip()
+    if gh_token:
+        res = _call_openai_compat_json(
+            "https://models.github.ai/inference/chat/completions",
+            gh_token,
+            "openai/gpt-4o-mini",
+            prompt,
+            "GH_MODELS",
+            require_scenes=require_scenes,
+        )
+        if res is not None:
+            return res
 
     # 1. OpenRouter free high-intelligence models (if OPENROUTER_API_KEY is set)
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
@@ -1139,8 +1210,25 @@ def _agent_6_thumbnail_and_seo(plan: dict) -> None:
 
 
 def _call_llm_text(prompt: str) -> str:
-    """Call OpenRouter / DeepSeek for raw TSX code generation without JSON wrapping."""
+    """Call GitHub Models / OpenRouter / DeepSeek for raw TSX code generation without JSON wrapping."""
     import requests  # type: ignore
+
+    gh_token = os.getenv("GH_MODELS_TOKEN", "").strip()
+    if gh_token:
+        try:
+            print("[AGENT-4 TSX] Calling GH_MODELS openai/gpt-4o-mini...")
+            r = requests.post(
+                "https://models.github.ai/inference/chat/completions",
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {gh_token}"},
+                json={"model": "openai/gpt-4o-mini", "messages": [{"role": "user", "content": prompt}], "temperature": 0.25, "max_tokens": 6000},
+                timeout=60,
+            )
+            if r.ok:
+                text = str(r.json()["choices"][0]["message"]["content"]).strip()
+                if "export const DynamicReel" in text:
+                    return text
+        except Exception as exc:
+            print(f"[AGENT-4 TSX] GH_MODELS error: {exc}")
 
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if openrouter_key:
