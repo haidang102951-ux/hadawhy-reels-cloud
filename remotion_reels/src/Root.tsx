@@ -6,6 +6,7 @@ import { NvidiaSuccession40s } from "./NvidiaSuccession40s";
 import { Friday13Origins45s } from "./Friday13Origins45s";
 import { HaDaWhyUniversal9x16, UniversalScenePlan } from "./HaDaWhyUniversal9x16";
 import { DynamicReel } from "./DynamicReel";
+import { CinematicReel } from "./CinematicReel";
 import defaultUniversalPlan from "./scene_plan.json";
 import { ThumbnailCover9x16 } from "./components/ThumbnailCover9x16";
 import { ThumbnailDNAStudy9x16 } from "./components/ThumbnailDNAStudy9x16";
@@ -48,6 +49,26 @@ export const Root: React.FC = () => {
       <Composition
         id="HaDaWhyUniversal9x16"
         component={HaDaWhyUniversal9x16}
+        durationInFrames={1260}
+        fps={60}
+        width={1080}
+        height={1920}
+        defaultProps={{
+          plan: defaultUniversalPlan as unknown as UniversalScenePlan,
+        }}
+        calculateMetadata={({ props }) => {
+          const p = (props?.plan || defaultUniversalPlan) as unknown as UniversalScenePlan;
+          const fps = p.fps || 60;
+          const maxEnd = (p.scenes || []).reduce((m, s) => Math.max(m, s.endSec || 0), 10);
+          return {
+            fps,
+            durationInFrames: Math.max(60, Math.round(maxEnd * fps)),
+          };
+        }}
+      />
+      <Composition
+        id="CinematicReel"
+        component={CinematicReel}
         durationInFrames={1260}
         fps={60}
         width={1080}

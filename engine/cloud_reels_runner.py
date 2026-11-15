@@ -199,11 +199,11 @@ _STOCK_WATERMARK_DOMAINS = (
 
 
 def _vision_pick_best_image(query: str, candidates: list[bytes]) -> bytes:
-    """Use GitHub Models gpt-4o-mini Vision to pick the cleanest, exact-matching real photo among Google Image candidates."""
+    """Use OpenRouter free Vision model to pick the cleanest, exact-matching real photo among Google Image candidates."""
     if len(candidates) <= 1:
         return candidates[0]
-    gh_token = os.getenv("GH_MODELS_TOKEN", "").strip()
-    if not gh_token:
+    or_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if not or_key:
         return candidates[0]
     try:
         import base64
@@ -229,19 +229,20 @@ def _vision_pick_best_image(query: str, candidates: list[bytes]) -> bytes:
                 b64 = base64.b64encode(buf.getvalue()).decode("ascii")
             content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
 
-        r = requests.post(
-            "https://models.github.ai/inference/chat/completions",
-            headers={"Authorization": f"Bearer {gh_token}", "Content-Type": "application/json"},
-            json={"model": "openai/gpt-4o-mini", "messages": [{"role": "user", "content": content}], "max_tokens": 8, "temperature": 0},
-            timeout=25,
-        )
-        if r.ok:
-            ans = str(r.json()["choices"][0]["message"]["content"]).strip()
-            for ch in ans:
-                if ch.isdigit() and int(ch) < len(candidates):
-                    pick = int(ch)
-                    print(f"[VISION] Picked candidate #{pick}/{len(candidates)} for '{query}'")
-                    return candidates[pick]
+        for v_model in ("google/gemma-4-26b-a4b-it:free", "nvidia/nemotron-3.5-super-vl:free"):
+            r = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"},
+                json={"model": v_model, "messages": [{"role": "user", "content": content}], "max_tokens": 8, "temperature": 0},
+                timeout=25,
+            )
+            if r.ok:
+                ans = str((r.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
+                for ch in ans:
+                    if ch.isdigit() and int(ch) < len(candidates):
+                        pick = int(ch)
+                        print(f"[VISION] ({v_model}) Picked candidate #{pick}/{len(candidates)} for '{query}'")
+                        return candidates[pick]
     except Exception as exc:
         print(f"[VISION] Fallback to candidate #0 for '{query}': {exc}")
     return candidates[0]
@@ -440,20 +441,6 @@ def _call_gemini_json(prompt: str, require_scenes: bool = True) -> dict:
     import requests  # type: ignore
 
     last_err = None
-
-    # 0. GitHub Models (openai/gpt-4o-mini) - fast, reliable, Vietnamese + JSON
-    gh_token = os.getenv("GH_MODELS_TOKEN", "").strip()
-    if gh_token:
-        res = _call_openai_compat_json(
-            "https://models.github.ai/inference/chat/completions",
-            gh_token,
-            "openai/gpt-4o-mini",
-            prompt,
-            "GH_MODELS",
-            require_scenes=require_scenes,
-        )
-        if res is not None:
-            return res
 
     # 1. OpenRouter free high-intelligence models (if OPENROUTER_API_KEY is set)
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
@@ -787,17 +774,13 @@ QUY TẮC ĐẠO CỤ THẬT 100% (CẤM ICON HOẠT HÌNH):
 - TUYỆT ĐỐI CẤM dùng `objects/*.png` hay icon hoạt hình/vector.
 - Mọi hình ảnh/đạo cụ phải là ẢNH CHỤP THẬT ngoài đời đưa vào `assetSpecs` (`harvested/<name>.png`) để săn từ Wikipedia/Wikimedia!
 
-10 layout hợp lệ (BẮT BUỘC luân phiên đa dạng, mỗi video phải dùng `cinematic_backdrop` + `causal_chain` + `stat_odometer`/`bar_compare`):
-- "cinematic_backdrop": primaryAsset (ảnh thật tràn màn hình Ken Burns), infoTags
-- "hero_prop": primaryAsset, primaryLabel, subNote, infoTags
-- "compare_two": leftAsset, leftLabel, leftLabelColor, rightAsset, rightLabel, rightLabelColor, centerAsset, yearWatermark
-- "sat_map": mapRegion ("fra"|"uk"|"usa"|"world"), mapCaption
-- "two_tier": topLeftAsset, topLeftLabel, topRightAsset, bottomAsset, bottomTitle, bottomHighlight
-- "split_duo": leftAsset, leftLabel, rightAsset, rightLabel, ctaText
-- "stat_odometer": statNumber (số nguyên), statSuffix (vd "%", " USD"), statLabel, primaryAsset, yearWatermark, infoTags
-- "bar_compare": leftValue (số), leftLabel, leftLabelColor, rightValue (số), rightLabel, rightLabelColor, yearWatermark, infoTags
-- "archival_proof": primaryAsset, stampText (vd "SỰ THẬT 100%"), yearWatermark, infoTags
-- "causal_chain": chainSteps ([{{"badge":"BƯỚC 1","title":"...","detail":"..."}}, ... 3 bước nối tiếp]), primaryAsset (tùy chọn), yearWatermark
+6 layout ĐIỆN ẢNH 3D hợp lệ cho CinematicReel (BẮT BUỘC luân phiên đa dạng giữa các cảnh, KHÔNG lặp 2 cảnh liên tiếp cùng layout):
+- "dossier_stamp": primaryAsset (ảnh thật), heroText (tiêu đề 3-6 từ), stampText (con dấu đỏ 2-3 từ vd "MIỄN THUẾ 0%", "PHI LỢI NHUẬN"), eyebrow (nhãn nguồn vd "HỒ SƠ THỤY SĨ")
+- "odometer_shock": primaryAsset (ảnh thật), statNumber (số nguyên), statSuffix (vd "%", " USD", " TỶ"), statLabel (chú thích 2-4 từ), heroText (tuyệt đối KHÔNG lặp lại con số statNumber)
+- "cutout_ar_stage": primaryAsset (ảnh vật thể/tòa nhà, removeBg=true nếu là sản phẩm/nhân vật), heroText, statNumber + statSuffix (hoặc infoTags 1 cụm ngắn cho tia chỉ AR)
+- "split_versus": primaryAsset + leftLabel (nửa trên), rightAsset + rightLabel (nửa dưới), stampText hoặc statNumber+statSuffix (huy hiệu ở giữa vd "0% THUẾ")
+- "headline_evidence": primaryAsset, heroText (tiêu đề bằng chứng), eyebrow (nhãn đỏ nguồn tin)
+- "timeline_reveal": primaryAsset, chainSteps ([{{"badge":"BƯỚC 1","title":"...","detail":""}}, ... 3 bước nối tiếp])
 
 Mọi file "harvested/<name>.png" dùng trong scenes phải có trong assetSpecs."""
 
@@ -889,6 +872,12 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
     temp_dir.mkdir(parents=True, exist_ok=True)
     sfx_dir = REMOTION_DIR / "public" / "sfx"
     sfx_map = {
+        "dossier_stamp": sfx_dir / "metal_hit.mp3",
+        "odometer_shock": sfx_dir / "bass_hit.mp3",
+        "cutout_ar_stage": sfx_dir / "zoom_hit.mp3",
+        "split_versus": sfx_dir / "whoosh_big.mp3",
+        "headline_evidence": sfx_dir / "whoosh_big.mp3",
+        "timeline_reveal": sfx_dir / "gear_lock.mp3",
         "hero_prop": sfx_dir / "bass_hit.mp3",
         "stat_odometer": sfx_dir / "bass_hit.mp3",
         "compare_two": sfx_dir / "metal_hit.mp3",
@@ -990,7 +979,7 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
             sfx_entries.append((sfx_file, s0_ms, 0.80))
 
         # Odometer rolling ticks + jackpot/lock ding
-        if layout == "stat_odometer":
+        if layout in ("stat_odometer", "odometer_shock"):
             if tick_sfx.exists():
                 for step_ms in (140, 300, 460, 620, 780, 940):
                     if step_ms < s_dur_ms - 300:
@@ -1376,7 +1365,8 @@ def mode_render() -> Path:
     except AttributeError:
         avail_cpus = os.cpu_count() or 2
     concurrency = str(max(1, min(4, avail_cpus)))
-    comp_id = _agent_4_tsx_director(plan)
+    comp_id = _agent_4_tsx_director(plan) if os.getenv("DEEPSEEK_API_KEY", "").strip() else "CinematicReel"
+    print(f"[RENDER] Using Remotion composition: {comp_id}")
     run_cmd(
         [
             "npx",
