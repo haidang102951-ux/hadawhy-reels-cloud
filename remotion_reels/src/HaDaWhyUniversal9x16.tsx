@@ -87,11 +87,13 @@ const FONT_HEADING = `'KanitBlack', 'BeVietnamProBlack', sans-serif`;
 const FONT_BODY = `'BeVietnamProExtraBold', 'BeVietnamProBlack', sans-serif`;
 
 const ImpactHook: React.FC<{
-  eyebrow: string;
-  heroText: string;
+  eyebrow?: string;
+  heroText?: string;
   heroColor?: string;
   subNote?: string;
-}> = ({ eyebrow, heroText, heroColor = "#ff3b3b", subNote }) => {
+}> = ({ eyebrow = "", heroText = "", heroColor = "#ff3b3b", subNote }) => {
+  const safeHero = String(heroText || "");
+  const safeEyebrow = String(eyebrow || "");
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const slam = spring({ frame, fps, config: { damping: 11, stiffness: 250 } });
@@ -128,14 +130,14 @@ const ImpactHook: React.FC<{
           textShadow: "0 4px 18px rgba(0,0,0,0.9)",
         }}
       >
-        {eyebrow}
+        {safeEyebrow}
       </div>
       <div
         style={{
           position: "relative",
           display: "inline-block",
           fontFamily: FONT_HEADING,
-          fontSize: heroText.length > 10 ? 78 : 110,
+          fontSize: safeHero.length > 10 ? 78 : 110,
           fontWeight: 900,
           lineHeight: 1.02,
           marginTop: 6,
@@ -145,7 +147,7 @@ const ImpactHook: React.FC<{
           filter: `drop-shadow(0 0 28px ${heroColor}66) drop-shadow(0 10px 24px rgba(0,0,0,0.92))`,
         }}
       >
-        {heroText}
+        {safeHero}
         <span
           style={{
             position: "absolute",
@@ -156,7 +158,7 @@ const ImpactHook: React.FC<{
             pointerEvents: "none",
           }}
         >
-          {heroText}
+          {safeHero}
         </span>
       </div>
       {subNote ? (

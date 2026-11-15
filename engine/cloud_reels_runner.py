@@ -239,7 +239,16 @@ def _call_gemini_json(prompt: str) -> dict:
 
 
 def _build_captions_from_scenes(plan: dict) -> dict:
-    """Auto-generate word-level captions from each scene's narration if captions are omitted."""
+    """Normalize scene defaults and auto-generate word-level captions from narration if omitted."""
+    for idx, scene in enumerate(plan.get("scenes", []), start=1):
+        scene.setdefault("id", f"scene_{idx}")
+        scene.setdefault("eyebrow", "")
+        scene.setdefault("heroText", "")
+        scene.setdefault("heroColor", "#42B2F2")
+        if scene.get("eyebrow") is None:
+            scene["eyebrow"] = ""
+        if scene.get("heroText") is None:
+            scene["heroText"] = ""
     if plan.get("captions"):
         return plan
     captions = []
