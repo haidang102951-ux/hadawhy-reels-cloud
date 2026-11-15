@@ -56,7 +56,7 @@ image = (
     image=image,
     gpu="T4",
     timeout=900,
-    volumes={"/root/.cache": CACHE_VOL},
+    volumes={"/cache": CACHE_VOL},
 )
 def run_pipeline_gpu(
     mode: str,
@@ -81,8 +81,8 @@ def run_pipeline_gpu(
         subprocess.run(["npm", "install"], cwd=remotion_dir, check=True)
 
     env = os.environ.copy()
-    env["HF_HOME"] = "/root/.cache/huggingface"
-    env["U2NET_HOME"] = "/root/.cache/u2net"
+    env["HF_HOME"] = "/cache/huggingface"
+    env["U2NET_HOME"] = "/cache/u2net"
     if openrouter_key:
         env["OPENROUTER_API_KEY"] = openrouter_key
     if gemini_key:
