@@ -809,12 +809,22 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
     bgm_label: str | None = None
     if bgm_path.exists():
         inputs.extend(["-stream_loop", "-1", "-t", f"{total_dur:.3f}", "-i", str(bgm_path)])
-        filters.append(f"[{idx_counter}:a]volume=0.14[bgm_bed]")
-        bgm_label = "[bgm_bed]"
+        fade_out_st = max(0.5, total_dur - 0.8)
+        if vo_labels:
+            filters.append(f"[{base_idx}:a]{''.join(vo_labels)}amix=inputs={1 + len(vo_labels)}:duration=first:dropout_transition=0:normalize=0,asplit=2[vo_mix][vo_sc]")
+            filters.append(f"[{idx_counter}:a]volume=0.36,afade=t=in:st=0:d=0.4,afade=t=out:st={fade_out_st:.2f}:d=0.8[bgm_raw]")
+            filters.append("[bgm_raw][vo_sc]sidechaincompress=threshold=0.025:ratio=4:attack=25:release=320[bgm_ducked]")
+            bgm_label = "[bgm_ducked]"
+            mix_inputs = ["[vo_mix]"] + sfx_labels + [bgm_label]
+        else:
+            filters.append(f"[{idx_counter}:a]volume=0.32[bgm_bed]")
+            bgm_label = "[bgm_bed]"
+            mix_inputs = [f"[{base_idx}:a]"] + sfx_labels + [bgm_label]
         idx_counter += 1
+    else:
+        mix_inputs = [f"[{base_idx}:a]"] + vo_labels + sfx_labels
 
-    mix_inputs = [f"[{base_idx}:a]"] + vo_labels + sfx_labels + ([bgm_label] if bgm_label else [])
-    if len(mix_inputs) == 1:
+    if len(mix_inputs) == 1 and not vo_labels and not sfx_labels and not bgm_label:
         return None
 
     out_wav = temp_dir / "master_mix_14lufs.wav"
