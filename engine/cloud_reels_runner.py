@@ -122,9 +122,10 @@ def _fetch_wikipedia_image(query: str) -> bytes | None:
             img_url = img_info.get("source", "")
             w = int(img_info.get("width") or 0)
             h = int(img_info.get("height") or 0)
-            if img_url and not img_url.lower().endswith(".svg") and min(w, h) >= 350:
+            if img_url and not img_url.lower().endswith((".svg", ".tif", ".tiff", ".pdf")) and min(w, h) >= 350:
                 img_resp = requests.get(img_url, headers=headers, timeout=25)
-                if img_resp.ok and len(img_resp.content) > 20000:
+                ctype = img_resp.headers.get("content-type", "").lower()
+                if img_resp.ok and len(img_resp.content) > 20000 and ctype.startswith("image/") and "svg" not in ctype and "tiff" not in ctype:
                     return img_resp.content
     except Exception as exc:
         print(f"[HARVEST] Wikipedia fallback for '{query}': {exc}")
@@ -204,7 +205,13 @@ def _fetch_best_image(query: str) -> tuple[bytes | None, str]:
         for s_name, fn in order:
             raw_bytes = fn(q)
             if raw_bytes:
-                return raw_bytes, f"{s_name}('{q}')"
+                try:
+                    from PIL import Image  # type: ignore
+                    with Image.open(io.BytesIO(raw_bytes)) as test_im:
+                        test_im.verify()
+                    return raw_bytes, f"{s_name}('{q}')"
+                except Exception as exc:
+                    print(f"[AGENT-3 HARVEST] Invalid image bytes from {s_name}('{q}'): {exc}")
     return None, "none"
 
 
