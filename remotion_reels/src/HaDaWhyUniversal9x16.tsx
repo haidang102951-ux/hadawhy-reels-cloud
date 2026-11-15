@@ -173,12 +173,15 @@ const ImpactHook: React.FC<{
         style={{
           position: "relative",
           display: "inline-block",
+          maxWidth: 940,
           fontFamily: FONT_HEADING,
-          fontSize: safeHero.length > 14 ? 64 : safeHero.length > 9 ? 76 : 96,
+          fontSize: Math.min(96, Math.max(44, Math.floor(880 / Math.max(1, safeHero.length * 0.62)))),
           fontWeight: 900,
           lineHeight: 1.08,
           letterSpacing: "-0.02em",
           marginTop: 6,
+          textAlign: "center",
+          wordBreak: "break-word",
           color: heroColor,
           textShadow: `-3px -3px 0 #05070B, 3px -3px 0 #05070B, -3px 3px 0 #05070B, 3px 3px 0 #05070B, 0 6px 0 #05070B, 0 16px 32px rgba(0,0,0,0.95), 0 0 34px ${heroColor}66`,
         }}
@@ -793,6 +796,8 @@ const SceneStatOdometer: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) =
   const eased = 1 - Math.pow(1 - countProgress, 3);
   const currentVal = Math.round(targetNum * eased);
   const floatY = Math.sin(frame * 0.06) * 10;
+  const targetStr = `${Math.round(targetNum).toLocaleString("en-US")}${scene.statSuffix || ""}`;
+  const statFontSize = Math.min(144, Math.max(50, Math.floor(860 / Math.max(1, targetStr.length * 0.62))));
 
   return (
     <AbsoluteFill>
@@ -814,12 +819,15 @@ const SceneStatOdometer: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) =
       >
         <div
           style={{
+            maxWidth: "100%",
+            textAlign: "center",
+            overflowWrap: "anywhere",
             fontFamily: FONT_HEADING,
-            fontSize: 148,
+            fontSize: statFontSize,
             fontWeight: 900,
             color: scene.heroColor || "#FFE600",
             textShadow: `-4px -4px 0 #05070B, 4px -4px 0 #05070B, -4px 4px 0 #05070B, 4px 4px 0 #05070B, 0 8px 0 #05070B, 0 18px 34px rgba(0,0,0,0.95), 0 0 36px ${(scene.heroColor || "#FFE600")}88`,
-            lineHeight: 1,
+            lineHeight: 1.05,
           }}
         >
           {currentVal.toLocaleString("en-US")}
@@ -887,9 +895,9 @@ const SceneBarCompare: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => 
         }}
       >
         {/* Left Bar */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 320 }}>
-          <div style={{ fontFamily: FONT_HEADING, fontSize: 56, color: scene.leftLabelColor || "#94a3b8", marginBottom: 14 }}>
-            {Math.round(lv * grow)}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 380 }}>
+          <div style={{ fontFamily: FONT_HEADING, fontSize: Math.min(56, Math.max(30, Math.floor(310 / Math.max(1, lv.toLocaleString("en-US").length * 0.62)))), color: scene.leftLabelColor || "#94a3b8", marginBottom: 14, textAlign: "center" }}>
+            {Math.round(lv * grow).toLocaleString("en-US")}
           </div>
           <div
             style={{
@@ -905,9 +913,9 @@ const SceneBarCompare: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => 
           </div>
         </div>
         {/* Right Bar */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 320 }}>
-          <div style={{ fontFamily: FONT_HEADING, fontSize: 64, color: scene.rightLabelColor || "#FFE600", marginBottom: 14 }}>
-            {Math.round(rv * grow)}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 380 }}>
+          <div style={{ fontFamily: FONT_HEADING, fontSize: Math.min(64, Math.max(32, Math.floor(310 / Math.max(1, rv.toLocaleString("en-US").length * 0.62)))), color: scene.rightLabelColor || "#FFE600", marginBottom: 14, textAlign: "center" }}>
+            {Math.round(rv * grow).toLocaleString("en-US")}
           </div>
           <div
             style={{

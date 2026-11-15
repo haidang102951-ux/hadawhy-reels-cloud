@@ -521,16 +521,17 @@ HÃY HỌC ĐÚNG PHONG CÁCH 2 VIDEO MẪU ĐỈNH CAO CỦA KÊNH (MasterShowc
 Hãy sáng tác JSON scene_plan chất lượng tương đương cho yêu cầu: "{topic_prompt}"
 
 NGUYÊN TẮC NỘI DUNG & TEXT HOOK BẮT BUỘC:
-- Viết đủ 5 cảnh giàu thông tin (hoặc theo đúng thời lượng yêu cầu), theo 5 nhịp điều tra gây tò mò tột độ:
-  (1) Hook nghịch lý thực tế (cấm mở bài sáo rỗng) -> (2) Bằng chứng số liệu sốc -> (3) So sánh đối lập áp đảo -> (4) Chuỗi nhân-quả bóc trần cơ chế "WHY" ít ai biết -> (5) Kết luận sắc lạnh.
-- Lời thoại (`narration`) mỗi cảnh dài 13–19 từ, chứa KIẾN THỨC THẬT, tên riêng thật, con số thật, giải thích rõ CƠ CHẾ TẠI SAO (tạo cảm giác "à hóa ra là vậy!").
+- Viết đủ 6–7 cảnh CỰC KỲ GIÀU KIẾN THỨC CHUYÊN SÂU (tổng ~38–48 giây), đi theo mạch điều tra bóc tách lớp vỏ:
+  (1) Hook nghịch lý thực tế (cấm mở bài sáo rỗng) -> (2) Con số doanh thu/lợi nhuận gây sốc -> (3) Kiến thức phần cứng/kỹ thuật lõi ít ai biết (tên chip, thông số, năm ra mắt, công nghệ độc quyền) -> (4) Chuỗi nhân-quả bóc trần cơ chế khóa chặt hệ sinh thái ("causal_chain") -> (5) Đối chiếu đối thủ / nút thắt chuỗi cung ứng ("bar_compare" hoặc "compare_two") -> (6) Kết luận bản chất WHY sắc lạnh.
+- Lời thoại (`narration`) mỗi cảnh dài 15–22 từ, BẮT BUỘC chứa KIẾN THỨC THẬT CỤ THỂ (tên riêng, năm lịch sử, thông số kỹ thuật thật, tỷ suất lợi nhuận, cơ chế độc quyền), tạo cảm giác "nghe xong mở mang đầu óc ngay lập tức!".
 - **LUẬT THÉP TEXT HOOK (`eyebrow` & `heroText`):**
   * TUYỆT ĐỐI CẤM ĐẶT CÂU HỎI XÀM trong `eyebrow` hay `heroText` (CẤM "TẠI SAO?", "VÌ SAO?", "LÀ GÌ?", "CÓ BIẾT?", dấu "?").
   * `heroText` (1–3 từ) PHẢI LÀ **SỰ THẬT CHẤN ĐỘNG / CON SỐ / NGHỊCH LÝ ĐẮT GIÁ** giải quyết thẳng vấn đề (VD: `"KẺ BÁN XẺNG"`, `"30.000 USD"`, `"90% ĐỘC TÔN"`, `"CÁI BẪY CUDA"`, `"KHÔNG LỐI THOÁT"`).
   * `heroColor` chọn màu sáng rực rỡ (`#FFE600`, `#FF4D5A`, `#42B2F2`, `#FFFFFF`).
-- MỖI CẢNH PHẢI CÓ `infoTags`: mảng 2–3 thẻ thông tin ngắn chứa số liệu/kiến thức thật (VD: `["30.000 USD / CHIP", "80GB HBM3", "LỢI NHUẬN 75%"]`).
-- BẮT BUỘC CÓ ÍT NHẤT 1 CẢNH DÙNG `"causal_chain"` với `chainSteps` (3 bước nối tiếp nhau A -> B -> C để người xem thấy sự việc này kéo theo sự việc kia!).
-- TRONG `assetSpecs`: ÁP DỤNG LUẬT **"NÓI A HIỆN ĐÚNG A"** — chỉ tìm đúng VẬT THỂ / NHÂN VẬT THẬT được nhắc tới trong lời thoại bằng tên chuẩn ngắn gọn tiếng Anh (VD: `"Jensen Huang"`, `"Nvidia H100 GPU"`, `"gold shovel"`, `"AMD Instinct MI300"`). TUYỆT ĐỐI CẤM bịa hình ẩn dụ lạc đề (như lâu đài, hào nước, cờ vua) và CẤM tìm `"chart"`, `"pie"`, `"code"`, `"price"`, `"screenshot"`. Cảnh `causal_chain` và `bar_compare` KHÔNG cần `primaryAsset`.
+- VỚI `stat_odometer`: `statNumber` phải gọn đẹp (VD: `47` với `statSuffix`: `" TỶ USD"`, hoặc `90` với `"%"`, hoặc `30000` với `" USD"`). CẤM viết số dài 10-12 chữ số như `47500000000`.
+- MỖI CẢNH PHẢI CÓ `infoTags`: mảng 2–3 thẻ kiến thức ngắn chứa số liệu/sự thật đắt giá (VD: `["RA MẮT TỪ 2006", "4 TRIỆU LẬP TRÌNH VIÊN", "NVLINK 900 GB/S"]`).
+- BẮT BUỘC CÓ ÍT NHẤT 1 CẢNH DÙNG `"causal_chain"` với `chainSteps` (3 bước nối tiếp nhau A -> B -> C để người xem thấy rõ cơ chế!).
+- TRONG `assetSpecs`: ÁP DỤNG LUẬT **"NÓI A HIỆN ĐÚNG A"** — chỉ tìm đúng VẬT THỂ / NHÂN VẬT / ĐỊA ĐIỂM THẬT bằng tên riêng chuẩn tiếng Anh trên Wikipedia (VD: `"Jensen Huang"`, `"Nvidia H100"`, `"Nvidia headquarters"`, `"TSMC"`, `"AMD Instinct MI300"`). TUYỆT ĐỐI CẤM tìm `"chart"`, `"graph"`, `"stock"`, `"price"`, `"skyline"`, `"vertical"`, `"code"`, `"screenshot"`. Cảnh `causal_chain` và `bar_compare` KHÔNG cần `primaryAsset`.
 
 CHỈ trả về JSON hợp lệ (không markdown ```json):
 {{
@@ -731,13 +732,57 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
     _build_captions_from_scenes(plan)
     PLAN_PATH.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # 2. Contextual Text Hook SFX aligned to each synced scene startSec
-    sfx_entries: list[tuple[Path, int]] = []
+    # 2. Rich Multi-Layer Contextual SFX Hooks (scene impact + odometer ticks + causal pops + infoTags)
+    sfx_entries: list[tuple[Path, int, float]] = []
+    sfx_map["causal_chain"] = sfx_dir / "gear_lock.mp3"
+    tick_sfx = sfx_dir / "tick.mp3"
+    coin_sfx = sfx_dir / "coin1.mp3"
+    lock_sfx = sfx_dir / "lock.mp3"
+    pop_sfx = sfx_dir / "pop.mp3"
+    pop_dry_sfx = sfx_dir / "pop_dry.mp3"
+    whoosh_sfx = sfx_dir / "whoosh1.mp3"
+
     for scene in scenes:
-        sfx_file = sfx_map.get(str(scene.get("layout", "")), sfx_dir / "bass_hit.mp3")
+        s0_ms = max(0, int(round(float(scene.get("startSec", 0)) * 1000)))
+        s_dur_ms = max(1000, int(round((float(scene.get("endSec", 0)) - float(scene.get("startSec", 0))) * 1000)))
+        layout = str(scene.get("layout", ""))
+
+        # Primary scene entrance impact
+        sfx_file = sfx_map.get(layout, sfx_dir / "bass_hit.mp3")
         if sfx_file.exists():
-            delay_ms = max(0, int(round(float(scene.get("startSec", 0)) * 1000)))
-            sfx_entries.append((sfx_file, delay_ms))
+            sfx_entries.append((sfx_file, s0_ms, 0.80))
+
+        # Odometer rolling ticks + jackpot/lock ding
+        if layout == "stat_odometer":
+            if tick_sfx.exists():
+                for step_ms in (140, 300, 460, 620, 780, 940):
+                    if step_ms < s_dur_ms - 300:
+                        sfx_entries.append((tick_sfx, s0_ms + step_ms, 0.56))
+            end_ding = coin_sfx if coin_sfx.exists() else lock_sfx
+            if end_ding.exists() and s_dur_ms > 1300:
+                sfx_entries.append((end_ding, s0_ms + 1180, 0.78))
+
+        # Causal chain 3-step sequential pop/lock
+        elif layout == "causal_chain":
+            for step_idx in range(min(3, len(scene.get("chainSteps") or []) or 3)):
+                t_ms = s0_ms + 150 + step_idx * 380
+                if t_ms < s0_ms + s_dur_ms - 200 and pop_sfx.exists():
+                    sfx_entries.append((pop_sfx, t_ms, 0.68))
+
+        # Bar compare grow whoosh + lock
+        elif layout == "bar_compare":
+            if whoosh_sfx.exists():
+                sfx_entries.append((whoosh_sfx, s0_ms + 220, 0.55))
+            if lock_sfx.exists() and s_dur_ms > 900:
+                sfx_entries.append((lock_sfx, s0_ms + 720, 0.65))
+
+        # InfoTags knowledge badges pop-in
+        info_tags = scene.get("infoTags") or []
+        if info_tags and pop_dry_sfx.exists() and layout != "causal_chain":
+            for t_idx in range(min(3, len(info_tags))):
+                t_ms = s0_ms + 280 + t_idx * 180
+                if t_ms < s0_ms + s_dur_ms - 180:
+                    sfx_entries.append((pop_dry_sfx, t_ms, 0.52))
 
     # 3. Mix Voiceover + SFX + Ducked BGM -> -14.0 LUFS WAV
     inputs: list[str] = ["-f", "lavfi", "-t", f"{total_dur:.3f}", "-i", "anullsrc=r=44100:cl=stereo"]
@@ -754,10 +799,10 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
         idx_counter += 1
 
     sfx_labels: list[str] = []
-    for sfx_path, delay_ms in sfx_entries:
+    for sfx_path, delay_ms, vol in sfx_entries:
         inputs.extend(["-i", str(sfx_path)])
         lbl = f"sfx{idx_counter}"
-        filters.append(f"[{idx_counter}:a]adelay={delay_ms}|{delay_ms},volume=0.55[{lbl}]")
+        filters.append(f"[{idx_counter}:a]adelay={delay_ms}|{delay_ms},volume={vol:.2f}[{lbl}]")
         sfx_labels.append(f"[{lbl}]")
         idx_counter += 1
 
