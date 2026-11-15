@@ -229,6 +229,8 @@ def _call_gemini_json(prompt: str) -> dict:
                 json={
                     "model": "openai",
                     "messages": [{"role": "user", "content": prompt}],
+                    "reasoning_effort": "low",
+                    "max_tokens": 4096,
                 },
                 timeout=90,
             )
