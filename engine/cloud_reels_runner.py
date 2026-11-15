@@ -82,6 +82,38 @@ def send_telegram_video(video_path: Path, caption: str) -> None:
         print(f"[TELEGRAM] Sent video {video_path.name}: {resp.status}")
 
 
+def _fetch_wikipedia_image(query: str) -> bytes | None:
+    import requests  # type: ignore
+
+    headers = {"User-Agent": "HaDaWhyCloudBot/1.0 (https://github.com/haidang102951-ux/hadawhy-reels-cloud)"}
+    params = {
+        "action": "query",
+        "generator": "search",
+        "gsrsearch": query,
+        "gsrlimit": "4",
+        "prop": "pageimages",
+        "piprop": "original|thumbnail",
+        "pithumbsize": "1200",
+        "format": "json",
+    }
+    try:
+        r = requests.get("https://en.wikipedia.org/w/api.php", params=params, headers=headers, timeout=20)
+        r.raise_for_status()
+        pages = r.json().get("query", {}).get("pages", {})
+        for page in sorted(pages.values(), key=lambda p: p.get("index", 99)):
+            img_info = page.get("original") or page.get("thumbnail") or {}
+            img_url = img_info.get("source", "")
+            w = int(img_info.get("width") or 0)
+            h = int(img_info.get("height") or 0)
+            if img_url and not img_url.lower().endswith(".svg") and min(w, h) >= 350:
+                img_resp = requests.get(img_url, headers=headers, timeout=25)
+                if img_resp.ok and len(img_resp.content) > 20000:
+                    return img_resp.content
+    except Exception as exc:
+        print(f"[HARVEST] Wikipedia fallback for '{query}': {exc}")
+    return None
+
+
 def _fetch_wikimedia_image(query: str) -> bytes | None:
     import requests  # type: ignore
 
@@ -134,7 +166,7 @@ def _fetch_pollinations_image(query: str) -> bytes | None:
 
 def _is_person_or_place_query(query: str) -> bool:
     q = query.lower()
-    return any(k in q for k in ("ceo", "founder", "president", "building", "factory", "headquarters", "newspaper", "portrait", "huang", "musk"))
+    return any(k in q for k in ("ceo", "founder", "president", "building", "factory", "headquarters", "newspaper", "portrait", "huang", "musk", "nvidia", "tsmc", "amd", "intel", "gpu", "server", "data center", "wafer"))
 
 
 def harvest_assets(plan: dict, clean: bool = False) -> None:
@@ -162,11 +194,22 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
         remove_bg = bool(item.get("removeBg", True))
         print(f"[HARVEST] Fetching '{query}' -> {out_path.name} (removeBg={remove_bg})")
 
-        # Prefer crisp 3D studio renders for hardware/tech/props; Wikimedia for real people/places
+        # Prefer canonical Wikipedia real photos for real entities; Pollinations 3D render for isolated props
+        raw_bytes = None
+        src_name = "none"
         if _is_person_or_place_query(query):
-            raw_bytes = _fetch_wikimedia_image(query) or _fetch_pollinations_image(query)
+            for s_name, fn in (("wikipedia", _fetch_wikipedia_image), ("wikimedia", _fetch_wikimedia_image), ("pollinations", _fetch_pollinations_image)):
+                raw_bytes = fn(query)
+                if raw_bytes:
+                    src_name = s_name
+                    break
         else:
-            raw_bytes = _fetch_pollinations_image(query) or _fetch_wikimedia_image(query)
+            for s_name, fn in (("pollinations", _fetch_pollinations_image), ("wikipedia", _fetch_wikipedia_image), ("wikimedia", _fetch_wikimedia_image)):
+                raw_bytes = fn(query)
+                if raw_bytes:
+                    src_name = s_name
+                    break
+        print(f"[HARVEST]   -> source={src_name} ({len(raw_bytes) if raw_bytes else 0} bytes)")
         if not raw_bytes:
             Image.new("RGBA", (512, 512), (66, 178, 242, 40)).save(out_path, "PNG")
             continue
@@ -448,7 +491,7 @@ NGUYÊN TẮC NỘI DUNG & TEXT HOOK BẮT BUỘC:
   * `heroColor` chọn màu sáng rực rỡ (`#FFE600`, `#FF4D5A`, `#42B2F2`, `#FFFFFF`).
 - MỖI CẢNH PHẢI CÓ `infoTags`: mảng 2–3 thẻ thông tin ngắn chứa số liệu/kiến thức thật (VD: `["30.000 USD / CHIP", "80GB HBM3", "LỢI NHUẬN 75%"]`).
 - BẮT BUỘC CÓ ÍT NHẤT 1 CẢNH DÙNG `"causal_chain"` với `chainSteps` (3 bước nối tiếp nhau A -> B -> C để người xem thấy sự việc này kéo theo sự việc kia!).
-- TRONG `assetSpecs`: CHỈ tìm ảnh VẬT THỂ / NHÂN VẬT THẬT ngoài đời bằng tiếng Anh (VD: `"golden miner shovel"`, `"Nvidia H100 GPU hardware"`, `"Jensen Huang CEO"`, `"heavy steel padlock chain"`). TUYỆT ĐỐI CẤM tìm `"chart"`, `"pie"`, `"code"`, `"price"`, `"screenshot"`.
+- TRONG `assetSpecs`: ÁP DỤNG LUẬT **"NÓI A HIỆN ĐÚNG A"** — chỉ tìm đúng VẬT THỂ / NHÂN VẬT THẬT được nhắc tới trong lời thoại bằng tên chuẩn ngắn gọn tiếng Anh (VD: `"Jensen Huang"`, `"Nvidia H100 GPU"`, `"gold shovel"`, `"AMD Instinct MI300"`). TUYỆT ĐỐI CẤM bịa hình ẩn dụ lạc đề (như lâu đài, hào nước, cờ vua) và CẤM tìm `"chart"`, `"pie"`, `"code"`, `"price"`, `"screenshot"`. Cảnh `causal_chain` và `bar_compare` KHÔNG cần `primaryAsset`.
 
 CHỈ trả về JSON hợp lệ (không markdown ```json):
 {{
