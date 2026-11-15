@@ -793,7 +793,11 @@ def mode_render() -> Path:
     out_mp4 = OUT_DIR / f"{title}.mp4"
     # Build TTS + sync scene_plan.json BEFORE rendering Remotion so captions/scenes match voice 100%
     audio_wav = build_audio_track(plan, OUT_DIR / "audio_tmp")
-    concurrency = str(max(1, min(4, os.cpu_count() or 2)))
+    try:
+        avail_cpus = len(os.sched_getaffinity(0))
+    except AttributeError:
+        avail_cpus = os.cpu_count() or 2
+    concurrency = str(max(1, min(4, avail_cpus)))
     run_cmd(
         [
             "npx",

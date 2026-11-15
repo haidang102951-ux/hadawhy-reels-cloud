@@ -55,6 +55,8 @@ image = (
 @app.function(
     image=image,
     gpu="T4",
+    cpu=4.0,
+    memory=8192,
     timeout=900,
     volumes={"/cache": CACHE_VOL},
 )
