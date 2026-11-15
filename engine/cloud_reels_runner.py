@@ -1083,6 +1083,142 @@ def _agent_6_thumbnail_and_seo(plan: dict) -> None:
         print(f"[AGENT-6 THUMB/SEO] Warning: {exc}")
 
 
+def _call_llm_text(prompt: str) -> str:
+    """Call OpenRouter / DeepSeek for raw TSX code generation without JSON wrapping."""
+    import requests  # type: ignore
+
+    openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if openrouter_key:
+        for or_model in ("nvidia/nemotron-3-ultra-550b-a55b:free", "openrouter/free"):
+            try:
+                print(f"[AGENT-4 TSX] Calling {or_model}...")
+                r = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {openrouter_key}"},
+                    json={"model": or_model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.25, "max_tokens": 6000},
+                    timeout=60,
+                )
+                if r.ok:
+                    msg = (r.json().get("choices") or [{}])[0].get("message") or {}
+                    text = str(msg.get("content") or "").strip()
+                    if "export const DynamicReel" in text:
+                        return text
+            except Exception as exc:
+                print(f"[AGENT-4 TSX] {or_model} error: {exc}")
+
+    deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+    if deepseek_key:
+        r = requests.post(
+            "https://api.deepseek.com/chat/completions",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {deepseek_key}"},
+            json={"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "temperature": 0.25, "max_tokens": 6000},
+            timeout=60,
+        )
+        if r.ok:
+            return str(r.json()["choices"][0]["message"]["content"]).strip()
+    raise RuntimeError("No LLM returned valid DynamicReel TSX")
+
+
+def _extract_tsx_code(raw: str) -> str:
+    text = raw.strip()
+    for fence in ("```tsx", "```typescript", "```ts", "```"):
+        if fence in text:
+            parts = text.split(fence)
+            if len(parts) >= 2:
+                text = parts[1]
+                if "```" in text:
+                    text = text.split("```")[0]
+                break
+    idx = text.find("import React")
+    if idx != -1:
+        text = text[idx:]
+    return text.strip()
+
+
+def _agent_4_tsx_director(plan: dict) -> str:
+    """Agent 4 Motion Director: Write custom DynamicReel.tsx per video (like MasterShowcase20s) + tsc --noEmit self-repair loop."""
+    dyn_path = REMOTION_DIR / "src" / "DynamicReel.tsx"
+    safe_backup = dyn_path.read_text(encoding="utf-8") if dyn_path.exists() else ""
+
+    harvested_list = sorted([f"harvested/{p.name}" for p in HARVESTED_DIR.glob("*.png") if p.stat().st_size > 1024])
+    objects_list = sorted([f"objects/{p.name}" for p in (REMOTION_DIR / "public" / "objects").glob("*.png")])
+    fps = int(plan.get("fps", 30))
+    scenes_brief = [
+        {
+            "id": s.get("id"),
+            "fromFrame": int(round(float(s.get("startSec", 0)) * fps)),
+            "durationFrames": max(15, int(round((float(s.get("endSec", 3)) - float(s.get("startSec", 0))) * fps))),
+            "heroText": s.get("heroText"),
+            "eyebrow": s.get("eyebrow"),
+            "primaryAsset": s.get("primaryAsset", ""),
+            "iconAsset": s.get("iconAsset", ""),
+            "statNumber": s.get("statNumber"),
+            "statSuffix": s.get("statSuffix"),
+            "infoTags": s.get("infoTags", []),
+            "chainSteps": s.get("chainSteps", []),
+            "narration": s.get("narration", ""),
+        }
+        for s in plan.get("scenes", [])
+    ]
+
+    tsx_prompt = f"""Bạn là Kỹ Sư Đạo Diễn Remotion 3D (`fb-reels-motion-3d-director`). Hãy viết MỘT FILE CODE `DynamicReel.tsx` ĐỘC BẢN (KHÔNG dùng template slideshow cũ!) cho video 9:16 (1080x1920, {fps} fps).
+
+CÁC COMPONENT CÓ SẴN ĐƯỢC IMPORT ĐÚNG ĐƯỜNG DẪN:
+- `import React from "react";`
+- `import {{ AbsoluteFill, Img, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig }} from "remotion";`
+- `import {{ HaDaWhyMistBackground }} from "./components/HaDaWhyMistBackground";`
+- `import {{ ChannelWatermark9x16 }} from "./components/ChannelWatermark9x16";`
+- `import {{ KineticWordCaption }} from "./components/KineticWordCaption";`
+- `import {{ StickerPop }} from "./components/StickerPop";`
+- `import {{ CoinStream }} from "./components/CoinStream";`
+- `import defaultPlan from "./scene_plan.json";`
+- `import {{ UniversalScenePlan }} from "./HaDaWhyUniversal9x16";`
+
+YÊU CẦU KỸ THUẬT DỰNG PHIM ĐIỆN ẢNH (LÀM GIỐNG HỆT MasterShowcase20s.tsx):
+1. Export đúng `export const DynamicReel: React.FC<{{ plan?: UniversalScenePlan }}> = ({{ plan = defaultPlan as unknown as UniversalScenePlan }}) => {{ ... }};`
+2. Dùng `const frame = useCurrentFrame(); const {{ fps }} = useVideoConfig();`
+3. Dựng **Camera Rig 3D chuyển động mượt** (rung chấn nhẹ ở điểm đập `Math.sin(dt * 2.9)`, zoom/pan mượt, chuyển cảnh bằng `<Sequence from={{...}} durationInFrames={{...}}>`).
+4. **ĐA DẠNG BỐ CỤC TỪNG CẢNH (CẤM CẢNH NÀO CŨNG GIỐNG NHAU):**
+   - Dùng trực tiếp ảnh thật trong: `{json.dumps(harvested_list)}` và icon 3D trong: `{json.dumps(objects_list[:18])}` qua `<Img src={{staticFile("...")}} />` (CHỈ dùng đúng tên file có trong 2 danh sách này!).
+   - Cảnh 1 (Hook): Ảnh tràn/lớn + StickerPop icon 3D + chữ Hook to rõ (`maxWidth: 920`, không tràn mép, có `textShadow` viền đen dày).
+   - Cảnh có số liệu: Có `CoinStream` (nếu nói về tiền/lợi nhuận) hoặc số đếm nhảy động (`interpolate` + `Math.round`) + `StickerPop` icon 3D.
+   - Cảnh cơ chế/chuỗi sự kiện: Dùng đường nối SVG động (`strokeDashoffset`) hoặc thẻ bước trượt vào từ 2 bên.
+5. BẮT BUỘC render `<ChannelWatermark9x16 />` và `<KineticWordCaption phrases={{plan.captions || []}} />` ở lớp trên cùng!
+6. Mọi chữ tiếng Việt có dấu chuẩn, `maxWidth: 920, textAlign: "center", wordBreak: "break-word"`, không bao giờ tràn màn hình 1080px.
+
+DỮ LIỆU CÁC CẢNH CẦN DỰNG:
+{json.dumps(scenes_brief, ensure_ascii=False, indent=2)}
+
+CHỈ trả về code TypeScript hoàn chỉnh cho `DynamicReel.tsx` (bắt đầu bằng `import React from "react";`, không giải thích thêm)."""
+
+    current_prompt = tsx_prompt
+    for attempt in range(1, 4):
+        try:
+            raw_code = _call_llm_text(current_prompt)
+            tsx_code = _extract_tsx_code(raw_code)
+            if "export const DynamicReel" not in tsx_code or "KineticWordCaption" not in tsx_code:
+                raise RuntimeError("Missing DynamicReel export or KineticWordCaption")
+            dyn_path.write_text(tsx_code, encoding="utf-8")
+            proc = subprocess.run(["npx", "tsc", "--noEmit"], cwd=REMOTION_DIR, capture_output=True, text=True)
+            if proc.returncode == 0:
+                print(f"[AGENT-4 TSX] Custom DynamicReel.tsx compiled cleanly on attempt {attempt}!")
+                return "DynamicReel"
+            err_msg = (proc.stdout + "\n" + proc.stderr).strip()[:1500]
+            print(f"[AGENT-4 TSX] tsc failed (attempt {attempt}):\n{err_msg}")
+            current_prompt = (
+                f"File DynamicReel.tsx vừa viết bị lỗi TypeScript sau:\n{err_msg}\n\n"
+                f"Hãy sửa lại toàn bộ file DynamicReel.tsx cho hết lỗi `tsc --noEmit`. CHỈ trả về code TypeScript hoàn chỉnh:\n\n{tsx_code}"
+            )
+        except Exception as exc:
+            print(f"[AGENT-4 TSX] Attempt {attempt} error: {exc}")
+
+    # Restore safe wrapper if all 3 attempts failed
+    if safe_backup:
+        dyn_path.write_text(safe_backup, encoding="utf-8")
+    print("[AGENT-4 TSX] Falling back to HaDaWhyUniversal9x16")
+    return "HaDaWhyUniversal9x16"
+
+
 def mode_render() -> Path:
     plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
     harvest_assets(plan, clean=False)
@@ -1099,13 +1235,14 @@ def mode_render() -> Path:
     except AttributeError:
         avail_cpus = os.cpu_count() or 2
     concurrency = str(max(1, min(4, avail_cpus)))
+    comp_id = _agent_4_tsx_director(plan)
     run_cmd(
         [
             "npx",
             "remotion",
             "render",
             "src/index.ts",
-            "HaDaWhyUniversal9x16",
+            comp_id,
             str(raw_mp4),
             "--codec=h264",
             "--image-format=jpeg",
