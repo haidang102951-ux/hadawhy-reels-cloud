@@ -246,7 +246,13 @@ def _extract_json_object(text: str) -> dict:
     if start != -1 and end != -1 and end > start:
         raw = raw[start : end + 1]
     raw = re.sub(r",\s*([}\]])", r"\1", raw)
-    return json.loads(raw, strict=False)
+    obj = json.loads(raw, strict=False)
+    if isinstance(obj, dict) and "scenes" not in obj:
+        for wrapper_key in ("scene_plan", "plan", "data"):
+            if isinstance(obj.get(wrapper_key), dict) and "scenes" in obj[wrapper_key]:
+                obj = obj[wrapper_key]
+                break
+    return obj
 
 
 def _call_openai_compat_json(url: str, api_key: str, model: str, prompt: str, label: str) -> dict | None:
@@ -272,7 +278,11 @@ def _call_openai_compat_json(url: str, api_key: str, model: str, prompt: str, la
         if not str(text).strip():
             print(f"[{label}] {model} returned empty content")
             return None
-        return _extract_json_object(str(text))
+        obj = _extract_json_object(str(text))
+        if not isinstance(obj, dict) or not obj.get("scenes"):
+            print(f"[{label}] {model} JSON missing 'scenes' key, skipping...")
+            return None
+        return obj
     except Exception as exc:
         print(f"[{label}] {model} error: {exc}")
         return None

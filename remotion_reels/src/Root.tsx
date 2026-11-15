@@ -57,7 +57,7 @@ export const Root: React.FC = () => {
         calculateMetadata={({ props }) => {
           const p = (props?.plan || defaultUniversalPlan) as unknown as UniversalScenePlan;
           const fps = p.fps || 60;
-          const maxEnd = p.scenes.reduce((m, s) => Math.max(m, s.endSec), 10);
+          const maxEnd = (p.scenes || []).reduce((m, s) => Math.max(m, s.endSec || 0), 10);
           return {
             fps,
             durationInFrames: Math.max(60, Math.round(maxEnd * fps)),
