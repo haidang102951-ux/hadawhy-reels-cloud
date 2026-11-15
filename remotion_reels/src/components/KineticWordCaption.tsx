@@ -209,13 +209,13 @@ export const KineticWordCaption: React.FC<KineticWordCaptionProps> = ({
         left: 0,
         right: 0,
         width: 1080,
-        paddingLeft: 60,
-        paddingRight: 60,
+        paddingLeft: 72,
+        paddingRight: 72,
         boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        gap: 10,
+        gap: 8,
         zIndex: 50,
         pointerEvents: "none",
       }}
@@ -225,10 +225,10 @@ export const KineticWordCaption: React.FC<KineticWordCaptionProps> = ({
           key={`line-${lineIdx}`}
           style={{
             display: "flex",
-            flexWrap: "nowrap",
-            whiteSpace: "nowrap",
+            flexWrap: "wrap",
+            maxWidth: 936,
             justifyContent: "center",
-            gap: 18,
+            gap: "6px 14px",
           }}
         >
           {line.map((word, wIdx) => {
@@ -263,7 +263,7 @@ export const KineticWordCaption: React.FC<KineticWordCaptionProps> = ({
                 style={{
                   display: "inline-block",
                   fontFamily: "BeVietnamProBlack, sans-serif",
-                  fontSize: 54,
+                  fontSize: 46,
                   fontWeight: 900,
                   lineHeight: 1.08,
                   letterSpacing: "-0.01em",

@@ -83,7 +83,7 @@ const FONT_CSS = `
 }
 `;
 
-const FONT_HEADING = `'KanitBlack', 'BeVietnamProBlack', sans-serif`;
+const FONT_HEADING = `'BeVietnamProBlack', 'KanitBlack', sans-serif`;
 const FONT_BODY = `'BeVietnamProExtraBold', 'BeVietnamProBlack', sans-serif`;
 
 const ImpactHook: React.FC<{
@@ -308,7 +308,7 @@ const SceneCompareTwo: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => 
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            transform: `translateX(${interpolate(leftIn, [0, 1], [-80, 0])}px)`,
+            transform: `translateX(${interpolate(leftIn, [0, 1], [-80, 0])}px) translateY(${Math.sin(frame * 0.06) * 12}px) rotateZ(${Math.sin(frame * 0.04) * 2.2}deg)`,
             opacity: leftIn,
           }}
         >
@@ -349,7 +349,7 @@ const SceneCompareTwo: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => 
               left: "50%",
               top: 210,
               width: 240,
-              transform: "translateX(-50%) rotate(-18deg)",
+              transform: `translateX(-50%) rotate(${-18 + Math.sin(frame * 0.07) * 6}deg) scale(${1 + Math.sin(frame * 0.08) * 0.07})`,
               opacity: 0.9,
               filter: "drop-shadow(0 12px 24px rgba(0,0,0,0.95))",
               zIndex: 14,
@@ -364,7 +364,7 @@ const SceneCompareTwo: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => 
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            transform: `translateX(${interpolate(rightIn, [0, 1], [80, 0])}px)`,
+            transform: `translateX(${interpolate(rightIn, [0, 1], [80, 0])}px) translateY(${Math.sin(frame * 0.06 + 2.2) * 12}px) rotateZ(${-Math.sin(frame * 0.04) * 2.2}deg)`,
             opacity: rightIn,
           }}
         >
@@ -703,6 +703,39 @@ const SceneMotionGate: React.FC<{ children: React.ReactNode }> = ({ children }) 
   );
 };
 
+const AtmosphericMotes: React.FC = () => {
+  const frame = useCurrentFrame();
+  const motes = Array.from({ length: 18 }, (_, i) => {
+    const x = ((i * 173) % 1000) + 40;
+    const baseY = (i * 251) % 1800;
+    const speed = 0.9 + (i % 4) * 0.45;
+    const y = (baseY - frame * speed + 1920) % 1920;
+    const size = 4 + (i % 4) * 3;
+    const alpha = 0.16 + (i % 3) * 0.09;
+    return { x, y, size, alpha };
+  });
+  return (
+    <AbsoluteFill style={{ pointerEvents: "none", zIndex: 4 }}>
+      {motes.map((m, idx) => (
+        <div
+          key={idx}
+          style={{
+            position: "absolute",
+            left: m.x,
+            top: m.y,
+            width: m.size,
+            height: m.size,
+            borderRadius: "50%",
+            background: idx % 3 === 0 ? "#42B2F2" : "#FFFFFF",
+            opacity: m.alpha,
+            boxShadow: `0 0 ${m.size * 3}px ${idx % 3 === 0 ? "#42B2F2" : "#FFFFFF"}`,
+          }}
+        />
+      ))}
+    </AbsoluteFill>
+  );
+};
+
 export const HaDaWhyUniversal9x16: React.FC<HaDaWhyUniversal9x16Props> = ({
   plan = defaultPlan as unknown as UniversalScenePlan,
 }) => {
@@ -712,6 +745,7 @@ export const HaDaWhyUniversal9x16: React.FC<HaDaWhyUniversal9x16Props> = ({
     <AbsoluteFill style={{ backgroundColor: "#04060a" }}>
       <style>{FONT_CSS}</style>
       <HaDaWhyMistBackground intensity={plan.mistIntensity ?? 0.11} />
+      <AtmosphericMotes />
       <ChannelWatermark9x16 />
 
       {plan.scenes.map((scene) => {

@@ -239,20 +239,22 @@ def _call_gemini_json(prompt: str) -> dict:
 
 
 def _build_captions_from_scenes(plan: dict) -> dict:
-    """Normalize scene defaults and auto-generate word-level captions from narration if omitted."""
+    """Normalize scene defaults (non-empty Text Hook) and auto-wrap word-level captions."""
+    accent_cycle = ["#FFE600", "#FF3B47", "#42B2F2"]
     for idx, scene in enumerate(plan.get("scenes", []), start=1):
         scene.setdefault("id", f"scene_{idx}")
-        scene.setdefault("eyebrow", "")
-        scene.setdefault("heroText", "")
-        scene.setdefault("heroColor", "#42B2F2")
-        if scene.get("eyebrow") is None:
-            scene["eyebrow"] = ""
-        if scene.get("heroText") is None:
-            scene["heroText"] = ""
+        narration = str(scene.get("narration", "")).strip()
+        if not scene.get("eyebrow"):
+            scene["eyebrow"] = "SỰ THẬT BẤT NGỜ"
+        if not scene.get("heroText"):
+            words_fb = [w.strip(",.!?") for w in narration.split() if len(w.strip(",.!?")) > 1]
+            scene["heroText"] = " ".join(words_fb[:2]).upper() if words_fb else f"BÍ MẬT #{idx}"
+        if not scene.get("heroColor"):
+            scene["heroColor"] = accent_cycle[(idx - 1) % len(accent_cycle)]
     if plan.get("captions"):
         return plan
     captions = []
-    for scene in plan.get("scenes", []):
+    for s_idx, scene in enumerate(plan.get("scenes", [])):
         narration = str(scene.get("narration", "")).strip()
         if not narration:
             continue
@@ -262,14 +264,34 @@ def _build_captions_from_scenes(plan: dict) -> dict:
         s0 = float(scene.get("startSec", 0)) + 0.1
         s1 = max(s0 + 0.5, float(scene.get("endSec", s0 + 3.0)) - 0.1)
         step = (s1 - s0) / len(words)
+        highlight_color = "#FFE600" if s_idx % 2 == 0 else "#FF3B47"
         tokens = []
+        hi_start = max(0, len(words) - 2)
         for i, w in enumerate(words):
             t0 = round(s0 + i * step, 2)
             t1 = round(s0 + (i + 1) * step, 2)
-            tokens.append({"text": w.upper(), "startSec": t0, "endSec": t1, "highlight": (i % 3 == 1)})
-        mid = max(1, (len(tokens) + 1) // 2)
-        lines = [tokens[:mid]] + ([tokens[mid:]] if tokens[mid:] else [])
-        captions.append({"startSec": round(s0, 2), "endSec": round(s1, 2), "lines": lines})
+            tokens.append({
+                "text": w.upper(),
+                "startSec": t0,
+                "endSec": t1,
+                "color": highlight_color if i >= hi_start else "#FFFFFF",
+            })
+        # Wrap cleanly: max 3 words or 18 chars per line so captions never overflow 9:16 width
+        lines: list[list[dict]] = []
+        cur_line: list[dict] = []
+        cur_chars = 0
+        for tok in tokens:
+            tlen = len(tok["text"])
+            if cur_line and (len(cur_line) >= 3 or cur_chars + 1 + tlen > 18):
+                lines.append(cur_line)
+                cur_line = [tok]
+                cur_chars = tlen
+            else:
+                cur_line.append(tok)
+                cur_chars += (1 if cur_line else 0) + tlen
+        if cur_line:
+            lines.append(cur_line)
+        captions.append({"startSec": round(s0, 2), "endSec": round(s1, 2), "lines": lines[:3]})
     plan["captions"] = captions
     return plan
 
