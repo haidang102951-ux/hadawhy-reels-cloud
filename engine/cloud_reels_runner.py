@@ -284,7 +284,7 @@ def _extract_json_object(text: str) -> dict:
     return obj
 
 
-def _call_openai_compat_json(url: str, api_key: str, model: str, prompt: str, label: str) -> dict | None:
+def _call_openai_compat_json(url: str, api_key: str, model: str, prompt: str, label: str, require_scenes: bool = True) -> dict | None:
     import requests  # type: ignore
 
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
@@ -308,8 +308,8 @@ def _call_openai_compat_json(url: str, api_key: str, model: str, prompt: str, la
             print(f"[{label}] {model} returned empty content")
             return None
         obj = _extract_json_object(str(text))
-        if not isinstance(obj, dict) or not obj.get("scenes"):
-            print(f"[{label}] {model} JSON missing 'scenes' key, skipping...")
+        if not isinstance(obj, dict) or (require_scenes and not obj.get("scenes")):
+            print(f"[{label}] {model} JSON invalid or missing 'scenes' key, skipping...")
             return None
         return obj
     except Exception as exc:
@@ -317,7 +317,7 @@ def _call_openai_compat_json(url: str, api_key: str, model: str, prompt: str, la
         return None
 
 
-def _call_gemini_json(prompt: str) -> dict:
+def _call_gemini_json(prompt: str, require_scenes: bool = True) -> dict:
     import time
     import requests  # type: ignore
 
@@ -327,10 +327,9 @@ def _call_gemini_json(prompt: str) -> dict:
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if openrouter_key:
         for or_model in (
-            "nvidia/nemotron-3.5-lightning:free",
-            "google/gemma-4-31b-it:free",
             "nvidia/nemotron-3-ultra-550b-a55b:free",
             "openrouter/free",
+            "google/gemma-4-31b-it:free",
         ):
             res = _call_openai_compat_json(
                 "https://openrouter.ai/api/v1/chat/completions",
@@ -338,6 +337,7 @@ def _call_gemini_json(prompt: str) -> dict:
                 or_model,
                 prompt,
                 "OPENROUTER",
+                require_scenes=require_scenes,
             )
             if res is not None:
                 return res
@@ -601,7 +601,7 @@ NGUYÊN TẮC NỘI DUNG & TEXT HOOK BẮT BUỘC:
     2) **Nghịch lý con số sốc:** "Chỉ tốn vài trăm đô sản xuất nhưng bán tới 30.000 đô — bí mật nằm ở một thứ giấu kín suốt 18 năm!"
     3) **Mở vòng lặp tò mò (Open Loop):** Kết câu Cảnh 1 phải gài móc câu khiến người xem PHẢI coi tiếp Cảnh 2 mới giải tỏa được (VD: "...nhưng ít ai biết cái bẫy thật sự không nằm ở phần cứng!").
   * `heroText` Cảnh 1 (1–3 từ) phải đấm thẳng vào nghịch lý đó (VD: `"KHÔNG PHẢI CHIP"`, `"BẪY TỪ 2006"`, `"LÃI GẤP 10 LẦN"`).
-- Viết đủ 6–7 cảnh CỰC KỲ GIÀU KIẾN THỨC CHUYÊN SÂU (tổng ~38–48 giây), đi theo mạch điều tra bóc tách từng lớp:
+- Nếu yêu cầu có ghi rõ thời lượng (VD "20s" hoặc "25s"), hãy điều chỉnh số cảnh cho khớp (VD: 3–4 cảnh cho ~20–25s; 6–7 cảnh cho ~38–48s), đi theo mạch điều tra bóc tách từng lớp:
   (1) Hook nghịch lý kéo giữ chân -> (2) Con số doanh thu/lợi nhuận gây sốc -> (3) Kiến thức phần cứng/kỹ thuật lõi ít ai biết (tên chip, thông số, năm ra mắt, công nghệ độc quyền) -> (4) Chuỗi nhân-quả bóc trần cơ chế khóa chặt hệ sinh thái ("causal_chain") -> (5) Đối chiếu đối thủ / nút thắt chuỗi cung ứng ("bar_compare" hoặc "compare_two") -> (6) Kết luận bản chất WHY sắc lạnh.
 - Lời thoại (`narration`) mỗi cảnh dài 15–22 từ, BẮT BUỘC chứa KIẾN THỨC THẬT CỤ THỂ (tên riêng, năm lịch sử, thông số kỹ thuật thật, tỷ suất lợi nhuận, cơ chế độc quyền), tạo cảm giác "nghe xong mở mang đầu óc ngay lập tức!".
 - **LUẬT THÉP TEXT HOOK (`eyebrow` & `heroText`):**
@@ -1002,13 +1002,19 @@ def _agent_6_thumbnail_and_seo(plan: dict) -> None:
         viral_title = f"{first_hero} — {second_hero}"
         hashtags = "#HaDaWhy #BiMatThuongHieu #KienThucThuVi #ReelsVN"
         try:
-            seo = _call_gemini_json(seo_prompt)
+            seo = _call_gemini_json(seo_prompt, require_scenes=False)
             line1 = str(seo.get("line1") or line1).upper()
             line2 = str(seo.get("line2") or line2).upper()
             viral_title = str(seo.get("viralTitle") or viral_title)
             hashtags = str(seo.get("hashtags") or hashtags)
         except Exception as exc:
             print(f"[AGENT-6 THUMB/SEO] LLM SEO fallback: {exc}")
+
+        try:
+            avail_cpus = len(os.sched_getaffinity(0))
+        except AttributeError:
+            avail_cpus = os.cpu_count() or 2
+        concurrency = str(max(1, min(4, avail_cpus)))
 
         thumb_props = {
             "backgroundPhotoSrc": bg_img,
@@ -1042,6 +1048,7 @@ def _agent_6_thumbnail_and_seo(plan: dict) -> None:
                 "ThumbnailCover9x16",
                 str(thumb_png),
                 f"--props={props_file}",
+                f"--concurrency={concurrency}",
                 "--gl=angle",
             ],
             cwd=REMOTION_DIR,
