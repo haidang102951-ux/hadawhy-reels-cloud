@@ -206,13 +206,72 @@ def _extract_json_object(text: str) -> dict:
     return json.loads(raw, strict=False)
 
 
+def _call_openai_compat_json(url: str, api_key: str, model: str, prompt: str, label: str) -> dict | None:
+    import requests  # type: ignore
+
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+    try:
+        print(f"[{label}] Calling {model}...")
+        r = requests.post(
+            url,
+            headers=headers,
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.4,
+                "max_tokens": 4096,
+            },
+            timeout=45,
+        )
+        if not r.ok:
+            print(f"[{label}] {model} HTTP {r.status_code}: {r.text[:220]}")
+            return None
+        text = r.json()["choices"][0]["message"]["content"]
+        return _extract_json_object(text)
+    except Exception as exc:
+        print(f"[{label}] {model} error: {exc}")
+        return None
+
+
 def _call_gemini_json(prompt: str) -> dict:
     import time
     import requests  # type: ignore
 
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
     last_err = None
 
+    # 1. OpenRouter free high-intelligence models (if OPENROUTER_API_KEY is set)
+    openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if openrouter_key:
+        for or_model in (
+            "deepseek/deepseek-chat-v3-0324:free",
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "qwen/qwen3-32b:free",
+        ):
+            res = _call_openai_compat_json(
+                "https://openrouter.ai/api/v1/chat/completions",
+                openrouter_key,
+                or_model,
+                prompt,
+                "OPENROUTER",
+            )
+            if res is not None:
+                return res
+
+    # 2. DeepSeek official API (if DEEPSEEK_API_KEY is set)
+    deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+    if deepseek_key:
+        res = _call_openai_compat_json(
+            "https://api.deepseek.com/chat/completions",
+            deepseek_key,
+            "deepseek-chat",
+            prompt,
+            "DEEPSEEK",
+        )
+        if res is not None:
+            return res
+
+    # 3. Google Gemini API (fail-fast 45s timeout)
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if api_key:
         for model in ("gemini-3.8-flash", "gemini-flash-latest"):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
@@ -223,7 +282,7 @@ def _call_gemini_json(prompt: str) -> dict:
             for retry in range(2):
                 try:
                     print(f"[GEMINI] Calling {model} (try {retry + 1})...")
-                    r = requests.post(url, json=payload, timeout=120)
+                    r = requests.post(url, json=payload, timeout=45)
                     if r.status_code == 404:
                         print(f"[GEMINI] {model} returned 404, skipping...")
                         last_err = r.text[:300]
@@ -231,7 +290,8 @@ def _call_gemini_json(prompt: str) -> dict:
                     if r.status_code in (429, 500, 502, 503, 504):
                         print(f"[GEMINI] {model} HTTP {r.status_code}: {r.text[:200]}")
                         last_err = f"HTTP {r.status_code}"
-                        time.sleep(15 if r.status_code == 429 else 5)
+                        if retry == 0:
+                            time.sleep(12 if r.status_code == 429 else 4)
                         continue
                     r.raise_for_status()
                     data = r.json()
@@ -240,8 +300,9 @@ def _call_gemini_json(prompt: str) -> dict:
                 except Exception as exc:
                     print(f"[GEMINI] {model} error: {exc}")
                     last_err = exc
-                    time.sleep(3)
+                    break
 
+    # 4. Zero-key fallback: Pollinations (deepseek -> openai)
     for p_model in ("deepseek", "openai"):
         for attempt in range(1, 3):
             try:
@@ -255,7 +316,7 @@ def _call_gemini_json(prompt: str) -> dict:
                         "reasoning_effort": "low",
                         "max_tokens": 4096,
                     },
-                    timeout=120,
+                    timeout=60,
                 )
                 if r.status_code == 402:
                     print(f"[POLLINATIONS] {p_model} 402 rate limit, waiting 47s...")
@@ -270,19 +331,7 @@ def _call_gemini_json(prompt: str) -> dict:
                 print(f"[POLLINATIONS] {p_model} error: {exc}")
                 last_err = exc
 
-    try:
-        print("[POLLINATIONS] Trying GET fallback...")
-        get_url = f"https://text.pollinations.ai/{urllib.parse.quote(prompt[:1800])}?model=openai&json=true"
-        r = requests.get(get_url, timeout=90)
-        if not r.ok:
-            print(f"[POLLINATIONS] GET HTTP {r.status_code}: {r.text[:300]}")
-            r.raise_for_status()
-        return _extract_json_object(r.text)
-    except Exception as exc:
-        print(f"[POLLINATIONS] GET fallback error: {exc}")
-        last_err = exc
-
-    raise RuntimeError(f"All LLM providers (Gemini + Pollinations) failed: {last_err}")
+    raise RuntimeError(f"All LLM providers (OpenRouter + DeepSeek + Gemini + Pollinations) failed: {last_err}")
 
 
 _EMPHASIS_WORDS = {
@@ -376,6 +425,15 @@ def _build_captions_from_scenes(plan: dict) -> dict:
 def mode_create(topic_prompt: str) -> None:
     if not topic_prompt.strip():
         raise RuntimeError("Topic prompt (--feedback) is required for --mode create/auto")
+
+    # Fast bypass: if caller already provides JSON scene_plan, skip LLM completely
+    if topic_prompt.lstrip().startswith("{"):
+        parsed = _build_captions_from_scenes(_extract_json_object(topic_prompt))
+        parsed["fps"] = 30
+        PLAN_PATH.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[CREATE] Loaded direct JSON scene_plan into {PLAN_PATH}")
+        harvest_assets(parsed, clean=True)
+        return
 
     prompt = f"""Bạn là Đạo diễn Điều tra kênh HaDa Why (@hadawhy) — chuyên làm video ngắn 9:16 bóc trần sự thật kinh tế/công nghệ với DỮ LIỆU THẬT, CON SỐ CỤ THỂ và CƠ CHẾ SÂU SẮC.
 Hãy sáng tác JSON scene_plan chất lượng cao cho yêu cầu: "{topic_prompt}"
