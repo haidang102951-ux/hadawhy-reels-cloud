@@ -61,6 +61,7 @@ image = (
 def run_pipeline_gpu(
     mode: str,
     feedback: str,
+    github_token: str = "",
     openrouter_key: str = "",
     gemini_key: str = "",
     deepseek_key: str = "",
@@ -68,11 +69,13 @@ def run_pipeline_gpu(
     tg_chat_id: str = "",
 ) -> int:
     repo_dir = "/tmp/hadawhy-reels-cloud"
+    auth_prefix = f"x-access-token:{github_token}@" if github_token else ""
+    clone_url = f"https://{auth_prefix}github.com/haidang102951-ux/hadawhy-reels-cloud.git"
     if os.path.exists(repo_dir):
         subprocess.run(["git", "-C", repo_dir, "pull", "--ff-only"], check=False)
     else:
         subprocess.run(
-            ["git", "clone", "--depth", "1", "https://github.com/haidang102951-ux/hadawhy-reels-cloud.git", repo_dir],
+            ["git", "clone", "--depth", "1", clone_url, repo_dir],
             check=True,
         )
 
@@ -108,6 +111,7 @@ def main(mode: str = "auto", feedback: str = "") -> None:
     rc = run_pipeline_gpu.remote(
         mode=mode,
         feedback=feedback,
+        github_token=os.getenv("GITHUB_TOKEN", ""),
         openrouter_key=os.getenv("OPENROUTER_API_KEY", ""),
         gemini_key=os.getenv("GEMINI_API_KEY", ""),
         deepseek_key=os.getenv("DEEPSEEK_API_KEY", ""),
