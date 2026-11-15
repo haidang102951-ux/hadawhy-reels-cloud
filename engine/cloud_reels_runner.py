@@ -199,7 +199,7 @@ def _call_gemini_json(prompt: str) -> dict:
             }
             try:
                 print(f"[GEMINI] Calling {model}...")
-                r = requests.post(url, json=payload, timeout=25)
+                r = requests.post(url, json=payload, timeout=60)
                 if r.status_code == 404:
                     print(f"[GEMINI] {model} returned 404, trying next model...")
                     last_err = r.text
@@ -220,11 +220,13 @@ def _call_gemini_json(prompt: str) -> dict:
                 headers={"Content-Type": "application/json"},
                 json={
                     "model": "openai",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "response_format": {"type": "json_object"},
+                    "messages": [
+                        {"role": "system", "content": "Output ONLY valid raw JSON. No markdown, no comments, no trailing commas."},
+                        {"role": "user", "content": prompt},
+                    ],
                     "temperature": 0.3,
                 },
-                timeout=60,
+                timeout=90,
             )
             r.raise_for_status()
             text = r.json()["choices"][0]["message"]["content"]
