@@ -521,8 +521,15 @@ HÃY HỌC ĐÚNG PHONG CÁCH 2 VIDEO MẪU ĐỈNH CAO CỦA KÊNH (MasterShowc
 Hãy sáng tác JSON scene_plan chất lượng tương đương cho yêu cầu: "{topic_prompt}"
 
 NGUYÊN TẮC NỘI DUNG & TEXT HOOK BẮT BUỘC:
-- Viết đủ 6–7 cảnh CỰC KỲ GIÀU KIẾN THỨC CHUYÊN SÂU (tổng ~38–48 giây), đi theo mạch điều tra bóc tách lớp vỏ:
-  (1) Hook nghịch lý thực tế (cấm mở bài sáo rỗng) -> (2) Con số doanh thu/lợi nhuận gây sốc -> (3) Kiến thức phần cứng/kỹ thuật lõi ít ai biết (tên chip, thông số, năm ra mắt, công nghệ độc quyền) -> (4) Chuỗi nhân-quả bóc trần cơ chế khóa chặt hệ sinh thái ("causal_chain") -> (5) Đối chiếu đối thủ / nút thắt chuỗi cung ứng ("bar_compare" hoặc "compare_two") -> (6) Kết luận bản chất WHY sắc lạnh.
+- **CẢNH 1 (3–4 GIÂY ĐẦU) PHẢI LÀ HOOK GÂY TÒ MÒ TỘT ĐỘ (CURIOSITY GAP / PATTERN INTERRUPT):**
+  * TUYỆT ĐỐI CẤM mở bài kiểu báo cáo khô khan (VD cấm: "Nvidia hiện nay đang chiếm 90% thị phần chip AI").
+  * BẮT BUỘC lật ngược nhận thức người xem bằng 1 trong 3 công thức kéo giữ chân ngay câu đầu:
+    1) **Lật tẩy ảo tưởng:** "Ai cũng tưởng [điều số đông nghĩ], nhưng thứ thật sự giúp [chủ thể] thống trị lại là [bí mật ngược đời]!"
+    2) **Nghịch lý con số sốc:** "Chỉ tốn vài trăm đô sản xuất nhưng bán tới 30.000 đô — bí mật nằm ở một thứ giấu kín suốt 18 năm!"
+    3) **Mở vòng lặp tò mò (Open Loop):** Kết câu Cảnh 1 phải gài móc câu khiến người xem PHẢI coi tiếp Cảnh 2 mới giải tỏa được (VD: "...nhưng ít ai biết cái bẫy thật sự không nằm ở phần cứng!").
+  * `heroText` Cảnh 1 (1–3 từ) phải đấm thẳng vào nghịch lý đó (VD: `"KHÔNG PHẢI CHIP"`, `"BẪY TỪ 2006"`, `"LÃI GẤP 10 LẦN"`).
+- Viết đủ 6–7 cảnh CỰC KỲ GIÀU KIẾN THỨC CHUYÊN SÂU (tổng ~38–48 giây), đi theo mạch điều tra bóc tách từng lớp:
+  (1) Hook nghịch lý kéo giữ chân -> (2) Con số doanh thu/lợi nhuận gây sốc -> (3) Kiến thức phần cứng/kỹ thuật lõi ít ai biết (tên chip, thông số, năm ra mắt, công nghệ độc quyền) -> (4) Chuỗi nhân-quả bóc trần cơ chế khóa chặt hệ sinh thái ("causal_chain") -> (5) Đối chiếu đối thủ / nút thắt chuỗi cung ứng ("bar_compare" hoặc "compare_two") -> (6) Kết luận bản chất WHY sắc lạnh.
 - Lời thoại (`narration`) mỗi cảnh dài 15–22 từ, BẮT BUỘC chứa KIẾN THỨC THẬT CỤ THỂ (tên riêng, năm lịch sử, thông số kỹ thuật thật, tỷ suất lợi nhuận, cơ chế độc quyền), tạo cảm giác "nghe xong mở mang đầu óc ngay lập tức!".
 - **LUẬT THÉP TEXT HOOK (`eyebrow` & `heroText`):**
   * TUYỆT ĐỐI CẤM ĐẶT CÂU HỎI XÀM trong `eyebrow` hay `heroText` (CẤM "TẠI SAO?", "VÌ SAO?", "LÀ GÌ?", "CÓ BIẾT?", dấu "?").
