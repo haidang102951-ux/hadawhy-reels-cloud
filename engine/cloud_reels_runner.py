@@ -326,7 +326,7 @@ Hãy sáng tác JSON scene_plan ngắn gọn cho yêu cầu: "{topic_prompt}"
 CHỈ trả về JSON hợp lệ (không markdown ```json):
 {{
   "projectTitle": "HaDaWhy_<TenKhongDau>",
-  "fps": 60,
+  "fps": 30,
   "mistIntensity": 0.11,
   "assetSpecs": [
     {{ "filename": "ten_anh_1.png", "query": "tu khoa tieng Anh chuan de tim anh that", "removeBg": true }}
@@ -362,6 +362,7 @@ CHỈ trả về JSON hợp lệ (không markdown ```json):
 Mọi file "harvested/<name>.png" dùng trong scenes phải có trong assetSpecs."""
 
     parsed = _build_captions_from_scenes(_call_gemini_json(prompt))
+    parsed["fps"] = 30
     PLAN_PATH.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[CREATE] Generated {PLAN_PATH} for topic: {topic_prompt}")
     harvest_assets(parsed, clean=True)
