@@ -556,8 +556,9 @@ def _agent_2_editor_qa(plan: dict) -> dict:
 
 
 def _agent_3_prune_missing_assets(plan: dict) -> dict:
-    """Ensure no missing/0-byte asset path remains in scene_plan before Remotion renders."""
+    """Ensure no missing/0-byte asset or invalid iconAsset path remains in scene_plan before Remotion renders."""
     asset_keys = ("primaryAsset", "leftAsset", "rightAsset", "centerAsset", "topLeftAsset", "topRightAsset", "bottomAsset")
+    public_dir = REMOTION_DIR / "public"
     for scene in plan.get("scenes", []):
         for k in asset_keys:
             val = str(scene.get(k, "")).strip()
@@ -566,6 +567,10 @@ def _agent_3_prune_missing_assets(plan: dict) -> dict:
                 if not fpath.exists() or fpath.stat().st_size < 1024:
                     print(f"[AGENT-3 QC] Removed missing asset '{val}' from {scene.get('id')}.{k}")
                     scene[k] = ""
+        icon_val = str(scene.get("iconAsset", "")).strip()
+        if icon_val:
+            if not (public_dir / icon_val).exists():
+                scene["iconAsset"] = ""
     return plan
 
 
@@ -616,31 +621,42 @@ NGUYÊN TẮC NỘI DUNG & TEXT HOOK BẮT BUỘC:
 CHỈ trả về JSON hợp lệ (không markdown ```json):
 {{
   "projectTitle": "HaDaWhy_<TenKhongDau>",
+  "theme": "tech_cyber",
   "fps": 30,
   "mistIntensity": 0.11,
   "assetSpecs": [
-    {{ "filename": "ten_anh_1.png", "query": "tu khoa tieng Anh chuan de tim anh that", "removeBg": true }}
+    {{ "filename": "ten_anh_1.png", "query": "tu khoa tieng Anh chuan de tim anh that", "removeBg": false }}
   ],
   "scenes": [
     {{
       "id": "scene_1",
       "startSec": 0,
       "endSec": 3.5,
-      "layout": "hero_prop",
+      "layout": "cinematic_backdrop",
       "eyebrow": "TIEU DE PHU",
       "heroText": "CHU TO",
       "heroColor": "#ff3b3b",
       "subNote": "GHI CHU",
-      "yearWatermark": "2026",
       "primaryAsset": "harvested/ten_anh_1.png",
+      "iconAsset": "objects/dollar.png",
       "primaryLabel": "",
-      "narration": "Cau thoai tieng Viet ngan gon 8-12 tu doc trong canh nay."
+      "narration": "Cau thoai tieng Viet ngan gon 15-20 tu doc trong canh nay."
     }}
   ]
 }}
 
-9 layout hợp lệ (luân phiên đa dạng, bắt buộc dùng causal_chain + bar_compare/stat_odometer):
-- "hero_prop": primaryAsset, primaryLabel, subNote, yearWatermark, infoTags
+BẮT BUỘC CHỌN ĐÚNG `theme` THEO DNA CHỦ ĐỀ (cấm lúc nào cũng dùng 1 màu):
+- `"tech_cyber"` (AI, chip, công nghệ)
+- `"retail_warm"` (siêu thị, thương hiệu tiêu dùng, ẩm thực, bán lẻ)
+- `"noir_dossier"` (đại án, bí ẩn, lịch sử, phốt thương hiệu)
+- `"finance_vox"` (tài chính, kinh tế vĩ mô, chứng khoán)
+
+KHO 29 ICON 3D CÓ SẴN (`iconAsset`, dùng trực tiếp KHÔNG cần đưa vào `assetSpecs`):
+`objects/ai_gpu_chip.png`, `objects/computer_chip.png`, `objects/robot_ai.png`, `objects/dollar.png`, `objects/coin.png`, `objects/chart_up.png`, `objects/chart_down.png`, `objects/crown.png`, `objects/padlock.png`, `objects/factory.png`, `objects/contract.png`, `objects/balance_scale.png`, `objects/bank.png`, `objects/vault.png`, `objects/warning.png`, `objects/shield.png`, `objects/magnifying_glass.png`, `objects/fire.png`, `objects/trophy.png`, `objects/airliner.png`, `objects/cargo_ship.png`, `objects/oil_barrel.png`, `objects/coffee_cup.png`, `objects/gavel.png`, `objects/handcuffs.png`, `objects/barrier.png`, `objects/scissors.png`, `objects/virus.png`.
+
+10 layout hợp lệ (BẮT BUỘC luân phiên đa dạng, mỗi video phải dùng `cinematic_backdrop` + `causal_chain` + `stat_odometer`/`bar_compare`):
+- "cinematic_backdrop": primaryAsset (ảnh thật tràn màn hình Ken Burns), iconAsset (1 icon 3D trong kho trên), infoTags
+- "hero_prop": primaryAsset, iconAsset (tùy chọn), primaryLabel, subNote, infoTags
 - "compare_two": leftAsset, leftLabel, leftLabelColor, rightAsset, rightLabel, rightLabelColor, centerAsset, yearWatermark
 - "sat_map": mapRegion ("fra"|"uk"|"usa"|"world"), mapCaption
 - "two_tier": topLeftAsset, topLeftLabel, topRightAsset, bottomAsset, bottomTitle, bottomHighlight
@@ -1121,6 +1137,8 @@ def mode_render() -> Path:
     send_telegram_video(out_mp4, f"Render hoàn tất ({qc_summary}): {title}")
     _agent_6_thumbnail_and_seo(plan)
     print(f"[RENDER] Output MP4: {out_mp4}")
+    # Auto-clean temporary cloud_out directory after Telegram delivery (Zero-Junk)
+    shutil.rmtree(OUT_DIR, ignore_errors=True)
     return out_mp4
 
 

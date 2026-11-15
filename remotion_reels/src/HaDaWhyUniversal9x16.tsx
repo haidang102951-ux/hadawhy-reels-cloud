@@ -36,13 +36,15 @@ export interface UniversalSceneSpec {
     | "stat_odometer"
     | "bar_compare"
     | "archival_proof"
-    | "causal_chain";
+    | "causal_chain"
+    | "cinematic_backdrop";
   eyebrow: string;
   heroText: string;
   heroColor?: string;
   subNote?: string;
   yearWatermark?: string;
   primaryAsset?: string;
+  iconAsset?: string;
   primaryLabel?: string;
   leftAsset?: string;
   leftLabel?: string;
@@ -73,10 +75,18 @@ export interface UniversalSceneSpec {
 export interface UniversalScenePlan {
   projectTitle: string;
   fps: number;
+  theme?: "tech_cyber" | "retail_warm" | "noir_dossier" | "finance_vox";
   mistIntensity?: number;
   scenes: UniversalSceneSpec[];
   captions: CaptionPhrase[];
 }
+
+const THEME_PALETTES = {
+  tech_cyber: { bg: "#030712", glow: "rgba(0, 229, 255, 0.22)", accent: "#00E5FF", grid: "rgba(0, 229, 255, 0.05)" },
+  retail_warm: { bg: "#140D07", glow: "rgba(245, 158, 11, 0.24)", accent: "#F59E0B", grid: "rgba(253, 230, 138, 0.045)" },
+  noir_dossier: { bg: "#0C0608", glow: "rgba(239, 68, 68, 0.24)", accent: "#EF4444", grid: "rgba(248, 113, 113, 0.04)" },
+  finance_vox: { bg: "#061214", glow: "rgba(16, 185, 129, 0.22)", accent: "#10B981", grid: "rgba(52, 211, 153, 0.05)" },
+} as const;
 
 export interface HaDaWhyUniversal9x16Props {
   plan?: UniversalScenePlan;
@@ -1172,6 +1182,74 @@ const SceneCausalChain: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) =>
   );
 };
 
+const SceneCinematicBackdrop: React.FC<{ scene: UniversalSceneSpec }> = ({ scene }) => {
+  const frame = useCurrentFrame();
+  const { fps, durationInFrames } = useVideoConfig();
+  const accent = scene.heroColor || "#FFE600";
+  const zoom = interpolate(frame, [0, Math.max(30, durationInFrames)], [1.0, 1.13], { extrapolateRight: "clamp" });
+  const panX = interpolate(frame, [0, Math.max(30, durationInFrames)], [-14, 14], { extrapolateRight: "clamp" });
+  const iconPop = spring({ frame: frame - 8, fps, config: { damping: 11, stiffness: 180 } });
+  const iconBob = Math.sin(frame * 0.09) * 10;
+
+  return (
+    <AbsoluteFill>
+      {scene.primaryAsset ? (
+        <Img
+          src={staticFile(scene.primaryAsset)}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            transform: `scale(${zoom}) translateX(${panX}px)`,
+            filter: "brightness(0.68) contrast(1.12)",
+          }}
+        />
+      ) : null}
+      {/* Optical top/bottom readability vignette without black boxes */}
+      <AbsoluteFill
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(4,6,12,0.82) 0%, rgba(4,6,12,0.18) 38%, rgba(4,6,12,0.18) 65%, rgba(4,6,12,0.88) 100%)",
+          pointerEvents: "none",
+        }}
+      />
+      <ImpactHook
+        eyebrow={scene.eyebrow}
+        heroText={scene.heroText}
+        heroColor={accent}
+        subNote={scene.subNote}
+      />
+      {scene.iconAsset ? (
+        <div
+          style={{
+            position: "absolute",
+            right: 70,
+            top: 860 + iconBob,
+            width: 240,
+            height: 240,
+            transform: `scale(${iconPop}) rotate(${Math.sin(frame * 0.05) * 6}deg)`,
+            opacity: iconPop,
+            zIndex: 20,
+          }}
+        >
+          <Img
+            src={staticFile(scene.iconAsset)}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              filter: `drop-shadow(0 0 24px ${accent}88) drop-shadow(0 20px 28px rgba(0,0,0,0.95))`,
+            }}
+          />
+        </div>
+      ) : null}
+      <InfoTagsRow tags={scene.infoTags} accent={accent} top={1180} />
+    </AbsoluteFill>
+  );
+};
+
 const SceneMotionGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -1242,11 +1320,20 @@ export const HaDaWhyUniversal9x16: React.FC<HaDaWhyUniversal9x16Props> = ({
   plan = defaultPlan as unknown as UniversalScenePlan,
 }) => {
   const { fps } = useVideoConfig();
+  const pal = THEME_PALETTES[plan.theme || "tech_cyber"] || THEME_PALETTES.tech_cyber;
 
   return (
-    <AbsoluteFill style={{ backgroundColor: "#04060a" }}>
+    <AbsoluteFill style={{ backgroundColor: pal.bg }}>
       <style>{FONT_CSS}</style>
       <HaDaWhyMistBackground intensity={plan.mistIntensity ?? 0.11} />
+      <AbsoluteFill
+        style={{
+          backgroundImage: `radial-gradient(circle at 50% 38%, ${pal.glow} 0%, transparent 62%), linear-gradient(${pal.grid} 1px, transparent 1px), linear-gradient(90deg, ${pal.grid} 1px, transparent 1px)`,
+          backgroundSize: "100% 100%, 72px 72px, 72px 72px",
+          pointerEvents: "none",
+          zIndex: 2,
+        }}
+      />
       <AtmosphericMotes />
       <ChannelWatermark9x16 />
 
@@ -1265,6 +1352,7 @@ export const HaDaWhyUniversal9x16: React.FC<HaDaWhyUniversal9x16Props> = ({
               {scene.layout === "bar_compare" && <SceneBarCompare scene={scene} />}
               {scene.layout === "archival_proof" && <SceneArchivalProof scene={scene} />}
               {scene.layout === "causal_chain" && <SceneCausalChain scene={scene} />}
+              {scene.layout === "cinematic_backdrop" && <SceneCinematicBackdrop scene={scene} />}
             </SceneMotionGate>
           </Sequence>
         );
