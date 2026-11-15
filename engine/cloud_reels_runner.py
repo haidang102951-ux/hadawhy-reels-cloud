@@ -774,13 +774,19 @@ QUY TẮC ĐẠO CỤ THẬT 100% (CẤM ICON HOẠT HÌNH):
 - TUYỆT ĐỐI CẤM dùng `objects/*.png` hay icon hoạt hình/vector.
 - Mọi hình ảnh/đạo cụ phải là ẢNH CHỤP THẬT ngoài đời đưa vào `assetSpecs` (`harvested/<name>.png`) để săn từ Wikipedia/Wikimedia!
 
-6 layout ĐIỆN ẢNH 3D hợp lệ cho CinematicReel (BẮT BUỘC luân phiên đa dạng giữa các cảnh, KHÔNG lặp 2 cảnh liên tiếp cùng layout):
-- "dossier_stamp": primaryAsset (ảnh thật), heroText (tiêu đề 3-6 từ), stampText (con dấu đỏ 2-3 từ vd "MIỄN THUẾ 0%", "PHI LỢI NHUẬN"), eyebrow (nhãn nguồn vd "HỒ SƠ THỤY SĨ")
+9 layout ĐIỆN ẢNH 3D hợp lệ cho CinematicReel (BẮT BUỘC luân phiên đa dạng giữa các cảnh, KHÔNG lặp 2 cảnh liên tiếp cùng layout; mỗi video PHẢI có ít nhất 1 `flow_diagram` hoặc `bar_versus` để giải thích cơ chế):
+- "flow_diagram": sơ đồ 3 bước dòng tiền/cơ chế phát sáng động — primaryAsset (ảnh nền), heroText (tiêu đề sơ đồ), chainSteps ([{{"badge":"BƯỚC 1","title":"...","detail":"..."}}, ... đúng 3 bước])
+- "bar_versus": biểu đồ cột 3D so sánh 2 con số — primaryAsset (ảnh nền), heroText (tiêu đề), leftLabel, leftValue (số nguyên), rightLabel, rightValue (số nguyên), statSuffix (vd "%", " USD")
+- "evidence_stack": nhiều lớp ảnh chồng 3D parallax — primaryAsset (ảnh nền/hồ sơ), rightAsset (ảnh vật thể tách nền `removeBg=true`), heroText (nhận định ngắn)
+- "dossier_stamp": primaryAsset (ảnh thật), heroText (tiêu đề 3-6 từ), stampText (con dấu đỏ 2-3 từ vd "MIỄN THUẾ 0%", "PHI LỢI NHUẬN"), eyebrow (nhãn nguồn)
 - "odometer_shock": primaryAsset (ảnh thật), statNumber (số nguyên), statSuffix (vd "%", " USD", " TỶ"), statLabel (chú thích 2-4 từ), heroText (tuyệt đối KHÔNG lặp lại con số statNumber)
-- "cutout_ar_stage": primaryAsset (ảnh vật thể/tòa nhà, removeBg=true nếu là sản phẩm/nhân vật), heroText, statNumber + statSuffix (hoặc infoTags 1 cụm ngắn cho tia chỉ AR)
-- "split_versus": primaryAsset + leftLabel (nửa trên), rightAsset + rightLabel (nửa dưới), stampText hoặc statNumber+statSuffix (huy hiệu ở giữa vd "0% THUẾ")
+- "cutout_ar_stage": primaryAsset (ảnh vật thể/nhân vật, `removeBg=true`), heroText, statNumber + statSuffix (tia chỉ AR)
+- "split_versus": primaryAsset + leftLabel (nửa trên), rightAsset + rightLabel (nửa dưới), stampText hoặc statNumber+statSuffix (huy hiệu ở giữa)
 - "headline_evidence": primaryAsset, heroText (tiêu đề bằng chứng), eyebrow (nhãn đỏ nguồn tin)
-- "timeline_reveal": primaryAsset, chainSteps ([{{"badge":"BƯỚC 1","title":"...","detail":""}}, ... 3 bước nối tiếp])
+- "timeline_reveal": primaryAsset, chainSteps ([{{"badge":"MỐC 1","title":"...","detail":""}}, ... 3 mốc])
+
+QUY TẮC LỜI THOẠI TIẾNG VIỆT TỰ NHIÊN:
+- Mỗi câu `narration` phải là văn nói tiếng Việt mạch lạc, có chủ ngữ-vị ngữ và liên kết nhân quả rõ ràng (vì sao -> kết quả thế nào), TUYỆT ĐỐI KHÔNG viết rời rạc kiểu liệt kê từ khóa.
 
 Mọi file "harvested/<name>.png" dùng trong scenes phải có trong assetSpecs."""
 
@@ -872,6 +878,9 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
     temp_dir.mkdir(parents=True, exist_ok=True)
     sfx_dir = REMOTION_DIR / "public" / "sfx"
     sfx_map = {
+        "flow_diagram": sfx_dir / "gear_lock.mp3",
+        "bar_versus": sfx_dir / "bass_hit.mp3",
+        "evidence_stack": sfx_dir / "whoosh_big.mp3",
         "dossier_stamp": sfx_dir / "metal_hit.mp3",
         "odometer_shock": sfx_dir / "bass_hit.mp3",
         "cutout_ar_stage": sfx_dir / "zoom_hit.mp3",

@@ -806,6 +806,393 @@ const SceneTimelineReveal: React.FC<{
   );
 };
 
+/* 7. FLOW DIAGRAM: 3D glowing mechanism / money-flow pipeline (100% data-driven from chainSteps) */
+const SceneFlowDiagram: React.FC<{
+  scene: ExtendedScene;
+  palette: Palette;
+  f: number;
+  fps: number;
+}> = ({ scene, palette, f, fps }) => {
+  const steps =
+    scene.chainSteps && scene.chainSteps.length >= 2
+      ? scene.chainSteps.slice(0, 3)
+      : [
+          { badge: "01", title: scene.heroText || "NGUỒN VÀO", detail: scene.eyebrow || "" },
+          { badge: "02", title: formatStat(scene) || "CƠ CHẾ CHÍNH", detail: scene.subNote || "" },
+          { badge: "03", title: scene.infoTags?.[0] || "KẾT QUẢ CUỐI", detail: scene.stampText || "" },
+        ];
+  const title = scene.heroText || scene.eyebrow || "CƠ CHẾ HOẠT ĐỘNG";
+  const pulseY = ((f % 45) / 45) * 100;
+
+  return (
+    <AbsoluteFill>
+      <StudioBackdrop palette={palette} frame={f} />
+      <SafePhoto
+        src={pickPrimaryAsset(scene)}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          opacity: 0.22,
+          transform: `scale(${interpolate(f, [0, 180], [1.03, 1.11])})`,
+          filter: "grayscale(0.35) contrast(1.15)",
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          top: 195,
+          left: 60,
+          right: 60,
+          textAlign: "center",
+          fontFamily: "Inter, sans-serif",
+          fontWeight: 900,
+          fontSize: fitFontSize(title, 46, 24, 30),
+          color: palette.accent,
+          textTransform: "uppercase",
+          letterSpacing: 1.5,
+          textShadow: "0 4px 18px rgba(0,0,0,0.95)",
+        }}
+      >
+        {title}
+      </div>
+
+      <div
+        style={{
+          position: "absolute",
+          top: 300,
+          left: 72,
+          right: 72,
+          display: "flex",
+          flexDirection: "column",
+          gap: 38,
+        }}
+      >
+        {steps.map((st, idx) => {
+          const delay = idx * 12;
+          const pop = spring({
+            frame: Math.max(0, f - delay),
+            fps,
+            config: { damping: 12, stiffness: 150 },
+          });
+          const isLast = idx === steps.length - 1;
+          return (
+            <React.Fragment key={idx}>
+              <div
+                style={{
+                  position: "relative",
+                  padding: "24px 28px",
+                  borderRadius: 20,
+                  backgroundColor: isLast ? "rgba(220, 38, 38, 0.2)" : "rgba(14, 19, 30, 0.88)",
+                  border: `2px solid ${isLast ? palette.stamp : palette.accent}99`,
+                  boxShadow: `0 20px 50px rgba(0,0,0,0.65), 0 0 28px ${
+                    isLast ? palette.stamp : palette.accent
+                  }33`,
+                  transform: `perspective(1000px) rotateX(3deg) translateY(${(1 - pop) * 28}px) scale(${0.92 + 0.08 * pop})`,
+                  opacity: pop,
+                }}
+              >
+                <div
+                  style={{
+                    fontFamily: "Inter, sans-serif",
+                    fontWeight: 900,
+                    fontSize: 22,
+                    color: isLast ? "#FCA5A5" : palette.accent,
+                    letterSpacing: 1.5,
+                    marginBottom: 6,
+                  }}
+                >
+                  {(st.badge || `BƯỚC ${idx + 1}`).toUpperCase()}
+                </div>
+                <div
+                  style={{
+                    fontFamily: "Inter, sans-serif",
+                    fontWeight: 900,
+                    fontSize: fitFontSize(st.title, 40, 24, 26),
+                    color: "#FFFFFF",
+                    lineHeight: 1.18,
+                  }}
+                >
+                  {st.title}
+                </div>
+                {st.detail ? (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontFamily: "Inter, sans-serif",
+                      fontWeight: 700,
+                      fontSize: 26,
+                      color: "rgba(255,255,255,0.78)",
+                    }}
+                  >
+                    {st.detail}
+                  </div>
+                ) : null}
+              </div>
+
+              {idx < steps.length - 1 ? (
+                <div
+                  style={{
+                    position: "relative",
+                    alignSelf: "center",
+                    width: 6,
+                    height: 36,
+                    marginTop: -28,
+                    marginBottom: -28,
+                    borderRadius: 3,
+                    background: `linear-gradient(180deg, ${palette.accent}, ${palette.stamp})`,
+                    boxShadow: `0 0 16px ${palette.accent}`,
+                    opacity: pop,
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: -5,
+                      top: `${pulseY}%`,
+                      width: 16,
+                      height: 16,
+                      borderRadius: "50%",
+                      backgroundColor: "#FFFFFF",
+                      boxShadow: `0 0 18px ${palette.accent}`,
+                    }}
+                  />
+                </div>
+              ) : null}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+/* 8. BAR VERSUS: 3D animated comparison columns (100% data-driven from leftValue/rightValue) */
+const SceneBarVersus: React.FC<{
+  scene: ExtendedScene;
+  palette: Palette;
+  f: number;
+  fps: number;
+}> = ({ scene, palette, f, fps }) => {
+  const grow = spring({ frame: Math.max(0, f - 6), fps, config: { damping: 14, stiffness: 105 } });
+  const lVal = typeof scene.leftValue === "number" ? scene.leftValue : 100;
+  const rVal = typeof scene.rightValue === "number" ? scene.rightValue : 0;
+  const maxVal = Math.max(1, lVal, rVal);
+  const lPct = Math.max(10, Math.round((lVal / maxVal) * 100));
+  const rPct = Math.max(6, Math.round((rVal / maxVal) * 100));
+  const unit = scene.statSuffix || "%";
+  const lLabel = scene.leftLabel || "MỨC THƯỜNG";
+  const rLabel = scene.rightLabel || "THỰC TẾ";
+  const title = scene.heroText || "SO SÁNH TRỰC DIỆN";
+
+  return (
+    <AbsoluteFill>
+      <StudioBackdrop palette={palette} frame={f} />
+      <SafePhoto
+        src={pickPrimaryAsset(scene)}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          opacity: 0.2,
+          transform: `scale(${interpolate(f, [0, 180], [1.02, 1.1])})`,
+        }}
+      />
+
+      <div
+        style={{
+          position: "absolute",
+          top: 210,
+          left: 60,
+          right: 60,
+          textAlign: "center",
+          fontFamily: "Inter, sans-serif",
+          fontWeight: 900,
+          fontSize: fitFontSize(title, 48, 22, 30),
+          color: "#FFFFFF",
+          textTransform: "uppercase",
+          textShadow: "0 4px 18px rgba(0,0,0,0.95)",
+        }}
+      >
+        {title}
+      </div>
+
+      {/* 3D Bar Stage */}
+      <div
+        style={{
+          position: "absolute",
+          top: 340,
+          left: 86,
+          right: 86,
+          height: 620,
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-around",
+          paddingBottom: 60,
+          borderBottom: "4px solid rgba(255,255,255,0.28)",
+        }}
+      >
+        {[
+          { val: lVal, pct: lPct, label: lLabel, col: scene.leftLabelColor || palette.accent },
+          { val: rVal, pct: rPct, label: rLabel, col: scene.rightLabelColor || palette.stamp },
+        ].map((item, idx) => {
+          const h = Math.round((420 * item.pct) / 100) * grow;
+          return (
+            <div
+              key={idx}
+              style={{
+                width: 300,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "Inter, sans-serif",
+                  fontWeight: 900,
+                  fontSize: 64,
+                  color: item.col,
+                  marginBottom: 14,
+                  textShadow: "0 4px 18px rgba(0,0,0,0.95)",
+                  opacity: grow,
+                }}
+              >
+                {Math.round(item.val * grow)}
+                {unit}
+              </div>
+              <div
+                style={{
+                  width: 190,
+                  height: Math.max(24, h),
+                  borderRadius: "18px 18px 4px 4px",
+                  background: `linear-gradient(135deg, ${item.col} 0%, ${item.col}88 100%)`,
+                  borderTop: "4px solid rgba(255,255,255,0.65)",
+                  boxShadow: `0 0 36px ${item.col}55, 14px 0 24px rgba(0,0,0,0.55)`,
+                }}
+              />
+              <div
+                style={{
+                  marginTop: 18,
+                  fontFamily: "Inter, sans-serif",
+                  fontWeight: 900,
+                  fontSize: fitFontSize(item.label, 34, 16, 24),
+                  color: "#FFFFFF",
+                  textAlign: "center",
+                }}
+              >
+                {item.label}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+/* 9. EVIDENCE STACK: Multi-layer parallax (backdrop + tilted card + floating 3D cutout) */
+const SceneEvidenceStack: React.FC<{
+  scene: ExtendedScene;
+  palette: Palette;
+  f: number;
+  fps: number;
+}> = ({ scene, palette, f, fps }) => {
+  const s1 = spring({ frame: f, fps, config: { damping: 14, stiffness: 120 } });
+  const s2 = spring({ frame: Math.max(0, f - 10), fps, config: { damping: 12, stiffness: 140 } });
+  const headline = scene.heroText || "";
+  const second = pickSecondaryAsset(scene);
+
+  return (
+    <AbsoluteFill style={{ backgroundColor: palette.bg }}>
+      <SafePhoto
+        src={pickPrimaryAsset(scene)}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          transform: `scale(${interpolate(f, [0, 180], [1.04, 1.13])})`,
+          filter: "brightness(0.45) contrast(1.12)",
+        }}
+      />
+
+      {/* Mid-ground tilted card */}
+      <div
+        style={{
+          position: "absolute",
+          top: 230,
+          left: 72,
+          right: 170,
+          height: 580,
+          borderRadius: 22,
+          overflow: "hidden",
+          border: "2px solid rgba(255,255,255,0.22)",
+          boxShadow: "0 30px 70px rgba(0,0,0,0.8)",
+          transform: `perspective(1100px) rotateY(7deg) translateX(${(1 - s1) * -90}px)`,
+          opacity: s1,
+        }}
+      >
+        <SafePhoto
+          src={pickPrimaryAsset(scene)}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      </div>
+
+      {/* Foreground 3D floating cutout / second proof */}
+      <div
+        style={{
+          position: "absolute",
+          top: 430,
+          right: 48,
+          width: 480,
+          height: 520,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transform: `translateX(${(1 - s2) * 110}px) translateY(${Math.sin(f * 0.05) * 8}px)`,
+          opacity: s2,
+        }}
+      >
+        <SafePhoto
+          src={second || pickPrimaryAsset(scene)}
+          style={{
+            maxWidth: "100%",
+            maxHeight: "100%",
+            objectFit: "contain",
+            borderRadius: 18,
+            filter: `drop-shadow(0 0 22px ${palette.accent}66) drop-shadow(0 24px 36px rgba(0,0,0,0.9))`,
+          }}
+        />
+      </div>
+
+      {headline ? (
+        <div
+          style={{
+            position: "absolute",
+            top: 930,
+            left: 64,
+            right: 64,
+            fontFamily: "Inter, sans-serif",
+            fontWeight: 900,
+            fontSize: fitFontSize(headline, 44, 24, 28),
+            color: palette.accent,
+            textShadow: "0 4px 18px rgba(0,0,0,0.98)",
+          }}
+        >
+          {headline}
+        </div>
+      ) : null}
+    </AbsoluteFill>
+  );
+};
+
 function resolveArchetype(layout?: string, index = 0): string {
   const l = (layout || "").toLowerCase();
   if (
@@ -814,16 +1201,29 @@ function resolveArchetype(layout?: string, index = 0): string {
     l === "split_versus" ||
     l === "odometer_shock" ||
     l === "headline_evidence" ||
-    l === "timeline_reveal"
+    l === "timeline_reveal" ||
+    l === "flow_diagram" ||
+    l === "bar_versus" ||
+    l === "evidence_stack"
   ) {
     return l;
   }
+  if (l.includes("flow") || l.includes("chain") || l.includes("causal")) return "flow_diagram";
+  if (l.includes("bar")) return "bar_versus";
+  if (l.includes("stack") || l.includes("multi")) return "evidence_stack";
   if (l.includes("odometer") || l.includes("stat")) return "odometer_shock";
   if (l.includes("card") || l.includes("evidence") || l.includes("archival")) return "headline_evidence";
   if (l.includes("split") || l.includes("compare")) return "split_versus";
   if (l.includes("cutout") || l.includes("ar") || l.includes("hero_prop")) return "cutout_ar_stage";
-  if (l.includes("timeline") || l.includes("causal")) return "timeline_reveal";
-  const cycle = ["dossier_stamp", "odometer_shock", "cutout_ar_stage", "headline_evidence", "split_versus"];
+  if (l.includes("timeline")) return "timeline_reveal";
+  const cycle = [
+    "dossier_stamp",
+    "flow_diagram",
+    "bar_versus",
+    "cutout_ar_stage",
+    "evidence_stack",
+    "odometer_shock",
+  ];
   return cycle[index % cycle.length];
 }
 
@@ -876,6 +1276,15 @@ const SceneDispatcher: React.FC<{
       )}
       {archetype === "timeline_reveal" && (
         <SceneTimelineReveal scene={scene} palette={palette} f={f} fps={fps} />
+      )}
+      {archetype === "flow_diagram" && (
+        <SceneFlowDiagram scene={scene} palette={palette} f={f} fps={fps} />
+      )}
+      {archetype === "bar_versus" && (
+        <SceneBarVersus scene={scene} palette={palette} f={f} fps={fps} />
+      )}
+      {archetype === "evidence_stack" && (
+        <SceneEvidenceStack scene={scene} palette={palette} f={f} fps={fps} />
       )}
     </AbsoluteFill>
   );
