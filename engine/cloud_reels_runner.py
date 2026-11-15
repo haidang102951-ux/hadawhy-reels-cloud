@@ -243,9 +243,9 @@ def _call_gemini_json(prompt: str) -> dict:
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if openrouter_key:
         for or_model in (
-            "deepseek/deepseek-chat-v3-0324:free",
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "qwen/qwen3-32b:free",
+            "google/gemma-4-31b-it:free",
+            "nvidia/nemotron-3-ultra-550b-a55b:free",
+            "openrouter/free",
         ):
             res = _call_openai_compat_json(
                 "https://openrouter.ai/api/v1/chat/completions",
