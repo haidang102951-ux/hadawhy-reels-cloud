@@ -192,6 +192,50 @@ def _should_keep_full_frame(query: str) -> bool:
     return any(k in q for k in ("gpu", "chip", "wafer", "facility", "factory", "cleanroom", "headquarters", "building", "server", "data center", "supercomputer", "fabricat", "rack", "silicon"))
 
 
+_STOCK_WATERMARK_DOMAINS = (
+    "shutterstock.com", "istockphoto.com", "alamy.com", "gettyimages.com",
+    "dreamstime.com", "123rf.com", "depositphotos.com", "vecteezy.com", "stock.adobe.com",
+)
+
+
+def _fetch_serper_google_image(query: str) -> bytes | None:
+    serper_key = os.getenv("SERPER_API_KEY", "").strip()
+    if not serper_key:
+        return None
+    import requests  # type: ignore
+
+    try:
+        r = requests.post(
+            "https://google.serper.dev/images",
+            headers={"X-API-KEY": serper_key, "Content-Type": "application/json"},
+            json={"q": query, "num": 8},
+            timeout=20,
+        )
+        if not r.ok:
+            print(f"[SERPER] HTTP {r.status_code}: {r.text[:200]}")
+            return None
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0 Safari/537.36"}
+        for img in r.json().get("images", []):
+            img_url = str(img.get("imageUrl") or "").strip()
+            w = int(img.get("imageWidth") or 0)
+            h = int(img.get("imageHeight") or 0)
+            low = img_url.lower()
+            if not img_url or any(d in low for d in _STOCK_WATERMARK_DOMAINS):
+                continue
+            if low.endswith((".svg", ".tif", ".tiff", ".gif")) or min(w, h) < 400:
+                continue
+            try:
+                resp = requests.get(img_url, headers=headers, timeout=15)
+                ctype = resp.headers.get("content-type", "").lower()
+                if resp.ok and len(resp.content) > 20000 and ctype.startswith("image/") and "svg" not in ctype:
+                    return resp.content
+            except Exception:
+                continue
+    except Exception as exc:
+        print(f"[SERPER] Google Images error for '{query}': {exc}")
+    return None
+
+
 def _fetch_best_image(query: str) -> tuple[bytes | None, str]:
     queries = [query]
     words = [w for w in query.split() if len(w) > 1]
@@ -199,9 +243,19 @@ def _fetch_best_image(query: str) -> tuple[bytes | None, str]:
         queries.append(" ".join(words[:2]))
     for q in queries:
         if _is_person_or_place_query(q):
-            order = (("wikipedia", _fetch_wikipedia_image), ("wikimedia", _fetch_wikimedia_image), ("pollinations", _fetch_pollinations_image))
+            order = (
+                ("google_serper", _fetch_serper_google_image),
+                ("wikipedia", _fetch_wikipedia_image),
+                ("wikimedia", _fetch_wikimedia_image),
+                ("pollinations", _fetch_pollinations_image),
+            )
         else:
-            order = (("pollinations", _fetch_pollinations_image), ("wikipedia", _fetch_wikipedia_image), ("wikimedia", _fetch_wikimedia_image))
+            order = (
+                ("google_serper", _fetch_serper_google_image),
+                ("wikipedia", _fetch_wikipedia_image),
+                ("wikimedia", _fetch_wikimedia_image),
+                ("pollinations", _fetch_pollinations_image),
+            )
         for s_name, fn in order:
             raw_bytes = fn(q)
             if raw_bytes:
