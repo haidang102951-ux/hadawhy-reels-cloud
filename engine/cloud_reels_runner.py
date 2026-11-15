@@ -170,7 +170,7 @@ def _fetch_pollinations_image(query: str) -> bytes | None:
     import requests  # type: ignore
 
     prompt_enc = urllib.parse.quote(
-        f"{query}, ultra sharp 3D isometric studio product render, vibrant bright rim lighting, high contrast, isolated on pure solid white background, no text, 8k"
+        f"{query}, authentic documentary photograph, real-world editorial studio photo, ultra realistic, sharp focus, 8k, no cartoon, no 3D render, no illustration, no text"
     )
     url = f"https://image.pollinations.ai/prompt/{prompt_enc}?model=flux&width=1024&height=1024&nologo=true"
     try:
@@ -658,12 +658,13 @@ BẮT BUỘC CHỌN ĐÚNG `theme` THEO DNA CHỦ ĐỀ (cấm lúc nào cũng d
 - `"noir_dossier"` (đại án, bí ẩn, lịch sử, phốt thương hiệu)
 - `"finance_vox"` (tài chính, kinh tế vĩ mô, chứng khoán)
 
-KHO 29 ICON 3D CÓ SẴN (`iconAsset`, dùng trực tiếp KHÔNG cần đưa vào `assetSpecs`):
-`objects/ai_gpu_chip.png`, `objects/computer_chip.png`, `objects/robot_ai.png`, `objects/dollar.png`, `objects/coin.png`, `objects/chart_up.png`, `objects/chart_down.png`, `objects/crown.png`, `objects/padlock.png`, `objects/factory.png`, `objects/contract.png`, `objects/balance_scale.png`, `objects/bank.png`, `objects/vault.png`, `objects/warning.png`, `objects/shield.png`, `objects/magnifying_glass.png`, `objects/fire.png`, `objects/trophy.png`, `objects/airliner.png`, `objects/cargo_ship.png`, `objects/oil_barrel.png`, `objects/coffee_cup.png`, `objects/gavel.png`, `objects/handcuffs.png`, `objects/barrier.png`, `objects/scissors.png`, `objects/virus.png`.
+QUY TẮC ĐẠO CỤ THẬT 100% (CẤM ICON HOẠT HÌNH):
+- TUYỆT ĐỐI CẤM dùng `objects/*.png` hay icon hoạt hình/vector.
+- Mọi hình ảnh/đạo cụ phải là ẢNH CHỤP THẬT ngoài đời đưa vào `assetSpecs` (`harvested/<name>.png`) để săn từ Wikipedia/Wikimedia!
 
 10 layout hợp lệ (BẮT BUỘC luân phiên đa dạng, mỗi video phải dùng `cinematic_backdrop` + `causal_chain` + `stat_odometer`/`bar_compare`):
-- "cinematic_backdrop": primaryAsset (ảnh thật tràn màn hình Ken Burns), iconAsset (1 icon 3D trong kho trên), infoTags
-- "hero_prop": primaryAsset, iconAsset (tùy chọn), primaryLabel, subNote, infoTags
+- "cinematic_backdrop": primaryAsset (ảnh thật tràn màn hình Ken Burns), infoTags
+- "hero_prop": primaryAsset, primaryLabel, subNote, infoTags
 - "compare_two": leftAsset, leftLabel, leftLabelColor, rightAsset, rightLabel, rightLabelColor, centerAsset, yearWatermark
 - "sat_map": mapRegion ("fra"|"uk"|"usa"|"world"), mapCaption
 - "two_tier": topLeftAsset, topLeftLabel, topRightAsset, bottomAsset, bottomTitle, bottomHighlight
@@ -1141,7 +1142,6 @@ def _agent_4_tsx_director(plan: dict) -> str:
     safe_backup = dyn_path.read_text(encoding="utf-8") if dyn_path.exists() else ""
 
     harvested_list = sorted([f"harvested/{p.name}" for p in HARVESTED_DIR.glob("*.png") if p.stat().st_size > 1024])
-    objects_list = sorted([f"objects/{p.name}" for p in (REMOTION_DIR / "public" / "objects").glob("*.png")])
     fps = int(plan.get("fps", 30))
     scenes_brief = [
         {
@@ -1151,7 +1151,6 @@ def _agent_4_tsx_director(plan: dict) -> str:
             "heroText": s.get("heroText"),
             "eyebrow": s.get("eyebrow"),
             "primaryAsset": s.get("primaryAsset", ""),
-            "iconAsset": s.get("iconAsset", ""),
             "statNumber": s.get("statNumber"),
             "statSuffix": s.get("statSuffix"),
             "infoTags": s.get("infoTags", []),
@@ -1178,11 +1177,11 @@ YÊU CẦU KỸ THUẬT DỰNG PHIM ĐIỆN ẢNH (LÀM GIỐNG HỆT MasterShow
 1. Export đúng `export const DynamicReel: React.FC<{{ plan?: UniversalScenePlan }}> = ({{ plan = defaultPlan as unknown as UniversalScenePlan }}) => {{ ... }};`
 2. Dùng `const frame = useCurrentFrame(); const {{ fps }} = useVideoConfig();`
 3. Dựng **Camera Rig 3D chuyển động mượt** (rung chấn nhẹ ở điểm đập `Math.sin(dt * 2.9)`, zoom/pan mượt, chuyển cảnh bằng `<Sequence from={{...}} durationInFrames={{...}}>`).
-4. **ĐA DẠNG BỐ CỤC TỪNG CẢNH (CẤM CẢNH NÀO CŨNG GIỐNG NHAU):**
-   - Dùng trực tiếp ảnh thật trong: `{json.dumps(harvested_list)}` và icon 3D trong: `{json.dumps(objects_list[:18])}` qua `<Img src={{staticFile("...")}} />` (CHỈ dùng đúng tên file có trong 2 danh sách này!).
-   - Cảnh 1 (Hook): Ảnh tràn/lớn + StickerPop icon 3D + chữ Hook to rõ (`maxWidth: 920`, không tràn mép, có `textShadow` viền đen dày).
-   - Cảnh có số liệu: Có `CoinStream` (nếu nói về tiền/lợi nhuận) hoặc số đếm nhảy động (`interpolate` + `Math.round`) + `StickerPop` icon 3D.
-   - Cảnh cơ chế/chuỗi sự kiện: Dùng đường nối SVG động (`strokeDashoffset`) hoặc thẻ bước trượt vào từ 2 bên.
+4. **ĐA DẠNG BỐ CỤC TỪNG CẢNH (100% ẢNH THẬT, CẤM ICON HOẠT HÌNH):**
+   - CHỈ dùng ảnh thật từ danh sách: `{json.dumps(harvested_list)}` qua `<Img src={{staticFile("...")}} />` (TUYỆT ĐỐI CẤM dùng `objects/*.png` hay icon hoạt hình).
+   - Cảnh 1 (Hook): Ảnh thật tràn màn hình / Ken Burns zoom + chữ Hook to rõ (`maxWidth: 920`, không tràn mép, có `textShadow` viền đen dày).
+   - Cảnh có số liệu: Số đếm nhảy động (`interpolate` + `Math.round`) + ảnh thật có bóng đổ 3D (`drop-shadow`) và viền sáng, hoặc `CoinStream` khi nói về dòng tiền.
+   - Cảnh cơ chế/chuỗi sự kiện: Đường nối SVG động (`strokeDashoffset`) hoặc thẻ bước trượt vào từ 2 bên kết hợp ảnh thật.
 5. BẮT BUỘC render `<ChannelWatermark9x16 />` và `<KineticWordCaption phrases={{plan.captions || []}} />` ở lớp trên cùng!
 6. Mọi chữ tiếng Việt có dấu chuẩn, `maxWidth: 920, textAlign: "center", wordBreak: "break-word"`, không bao giờ tràn màn hình 1080px.
 
