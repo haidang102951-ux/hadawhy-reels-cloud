@@ -16,6 +16,7 @@ import modal
 app = modal.App("hadawhy-reels-gpu")
 
 CACHE_VOL = modal.Volume.from_name("hadawhy-models-cache", create_if_missing=True)
+TG_STATE = modal.Dict.from_name("hadawhy-tg-memory", create_if_missing=True)
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -155,34 +156,109 @@ def telegram_webhook(payload: dict) -> dict:
         return {"ok": True, "ignored": True}
 
     low = text.lower()
-    if low in ("/start", "/help", "/status", "help", "menu"):
+    if low in ("/start", "/help", "help", "menu"):
         reply(
-            "🤖 TRỢ LÝ VIDEO HADA WHY (MODAL T4 GPU)\n"
-            "• Nhắn thẳng chủ đề bất kỳ (hoặc /auto <chủ đề>) → Tự viết kịch bản, tự code TSX, tự soi Vision & render 60fps gửi về đây.\n"
-            "• /create <chủ đề> → Tạo kịch bản + ảnh preview trước.\n"
-            "• /revise <góp ý> → Sửa kịch bản theo góp ý.\n"
-            "• /render → Render MP4 từ kịch bản đã tạo."
+            "Ê chào ông! Tôi là trợ lý làm video HaDa Why đây 🎬\n"
+            "Ông cứ chat tự nhiên như bạn bè (hỏi ý tưởng, check tiến độ, nhờ góp ý kịch bản), "
+            "khi nào chốt thì bảo tôi 'làm video về...' hoặc dùng nhanh:\n"
+            "• /auto <chủ đề> — Làm trọn gói từ A-Z\n"
+            "• /create <chủ đề> — Viết kịch bản + preview trước\n"
+            "• /revise <góp ý> — Sửa kịch bản\n"
+            "• /render — Xuất video 60fps"
         )
         return {"ok": True}
 
-    mode = "auto"
-    feedback = text
+    mode = ""
+    feedback = ""
+    reply_text = ""
+
     if low.startswith("/create"):
-        mode = "create"
-        feedback = text[len("/create"):].strip()
+        mode, feedback = "create", text[len("/create"):].strip()
     elif low.startswith("/revise"):
-        mode = "revise"
-        feedback = text[len("/revise"):].strip()
+        mode, feedback = "revise", text[len("/revise"):].strip()
     elif low.startswith("/render"):
-        mode = "render"
-        feedback = ""
+        mode, feedback = "render", ""
     elif low.startswith("/auto"):
-        mode = "auto"
-        feedback = text[len("/auto"):].strip()
+        mode, feedback = "auto", text[len("/auto"):].strip()
+    else:
+        # Chat tự nhiên như bạn bè bằng Gemini + nhớ ngữ cảnh
+        import json
+        import time
+        import requests  # type: ignore
+
+        history = []
+        last_job = {}
+        try:
+            history = TG_STATE.get(f"hist_{chat_id}", []) or []
+            last_job = TG_STATE.get(f"job_{chat_id}", {}) or {}
+        except Exception:
+            pass
+
+        job_info = ""
+        if last_job:
+            elapsed = int(time.time() - float(last_job.get("ts", time.time())))
+            job_info = f"Job gần nhất: mode={last_job.get('mode')}, topic='{last_job.get('topic')}', đã chạy được {elapsed} giây."
+
+        gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+        if gemini_key:
+            sys_prompt = (
+                "Bạn là cộng sự thân thiết (nói chuyện tự nhiên như bạn bè thân, xưng 'tôi/mình' gọi 'ông/bạn', ngắn gọn, thông minh, hài hước vừa phải, KHÔNG kiểu robot AI) "
+                "đang cùng vận hành kênh video ngắn HaDa Why (@hadawhy) chạy trên Modal GPU.\n"
+                f"{job_info}\n"
+                f"Lịch sử chat gần đây: {json.dumps(history[-8:], ensure_ascii=False)}\n"
+                f"Tin nhắn mới nhất từ bạn: {json.dumps(text, ensure_ascii=False)}\n\n"
+                "Hãy phân tích ý định và trả về ĐÚNG JSON:\n"
+                '{"action": "chat" | "auto" | "create" | "revise" | "render", "topic_or_feedback": "nội dung chủ đề/góp ý nếu action khác chat", "reply": "câu trả lời tự nhiên như bạn bè"}\n'
+                "- Nếu chỉ chào hỏi ('alo', 'ê'), hỏi thăm ('làm tới đâu rồi'), hoặc bàn ý tưởng chưa chốt làm -> action='chat', trả lời tự nhiên, KHÔNG chạy render.\n"
+                "- Chỉ khi người dùng ra lệnh hoặc chốt làm video (vd 'làm video về...', 'triển luôn đi', 'chạy đi') -> chọn action tương ứng ('auto'/'create'/'revise'/'render') và điền topic_or_feedback."
+            )
+            for g_model in ("gemini-2.5-flash", "gemini-flash-latest"):
+                try:
+                    r = requests.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={gemini_key}",
+                        json={
+                            "contents": [{"parts": [{"text": sys_prompt}]}],
+                            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.6},
+                        },
+                        timeout=15,
+                    )
+                    if r.ok:
+                        raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                        parsed = json.loads(raw)
+                        act = str(parsed.get("action", "chat")).strip().lower()
+                        reply_text = str(parsed.get("reply", "")).strip()
+                        if act in ("auto", "create", "revise", "render"):
+                            mode = act
+                            feedback = str(parsed.get("topic_or_feedback") or text).strip()
+                        else:
+                            mode = "chat"
+                        break
+                except Exception as exc:
+                    print(f"[TG-CHAT] {g_model} error: {exc}")
+
+        if not mode:
+            mode = "chat"
+            reply_text = reply_text or "Nghe rõ rồi ông ơi! Cần tôi làm video chủ đề gì hay bàn ý tưởng cứ nhắn nhé."
+
+        try:
+            history.append({"user": text, "bot": reply_text})
+            TG_STATE[f"hist_{chat_id}"] = history[-10:]
+        except Exception:
+            pass
+
+    if mode == "chat":
+        reply(reply_text)
+        return {"ok": True, "action": "chat"}
 
     if mode in ("auto", "create", "revise") and not feedback:
-        reply(f"⚠️ Thiếu nội dung cho lệnh /{mode}. Ví dụ: /{mode} Tại sao nước đóng chai đắt hơn xăng, làm 20s")
+        reply(f"Ê thiếu nội dung cho lệnh /{mode} rồi. Ví dụ: /{mode} Tại sao nước đóng chai đắt hơn xăng, làm 20s")
         return {"ok": True}
+
+    import time
+    try:
+        TG_STATE[f"job_{chat_id}"] = {"mode": mode, "topic": feedback, "ts": time.time()}
+    except Exception:
+        pass
 
     run_pipeline_gpu.spawn(
         mode=mode,
@@ -197,14 +273,16 @@ def telegram_webhook(payload: dict) -> dict:
         tg_chat_id=chat_id,
     )
 
-    if mode == "render":
-        reply("🎬 Đã nhận lệnh RENDER! Đang chạy trên Modal T4 GPU, xong sẽ gửi Video + Thumbnail + 3 Tiêu đề SEO về đây.")
+    if reply_text:
+        reply(reply_text)
+    elif mode == "render":
+        reply("Ok chốt đơn! Đang đẩy lên Modal T4 GPU render 60fps, vài phút nữa xong tôi gửi video qua đây nhé.")
     elif mode == "create":
-        reply(f"📝 Đã nhận lệnh TẠO KỊCH BẢN:\n\"{feedback}\"\nĐang xử lý trên Modal GPU...")
+        reply(f"Ok đang lên kịch bản & preview cho chủ đề:\n\"{feedback}\"\nChờ tôi tí nhé!")
     elif mode == "revise":
-        reply(f"✏️ Đã nhận góp ý sửa:\n\"{feedback}\"\nĐang cập nhật...")
+        reply(f"Rồi nhận góp ý:\n\"{feedback}\"\nĐể tôi sửa lại kịch bản ngay!")
     else:
-        reply(f"🚀 Đã nhận chủ đề:\n\"{feedback}\"\nĐang chạy quy trình 5 bước trên Modal T4 GPU (~2–4 phút), xong sẽ gửi Video + Thumbnail + 3 Tiêu đề SEO về đây!")
+        reply(f"Ok triển luôn chủ đề:\n\"{feedback}\"\nĐang chạy 5 bước trên Modal T4 GPU (~2–4 phút), xong tôi gửi video qua liền!")
 
     return {"ok": True, "spawned": mode}
 
