@@ -1584,8 +1584,40 @@ def _extract_tsx_code(raw: str) -> str:
 
 
 def _vision_inspect_beat_stills(still_paths: list[Path]) -> str | None:
-    """Send per-beat rendered still PNGs to Gemini Vision to catch overlapping text, clipping, black frames, or jagged cutouts."""
-    if not still_paths or not os.getenv("GEMINI_API_KEY", "").strip():
+    """Inspect per-beat still PNGs: (1) deterministic OpenCV/PIL empty-canvas check, (2) Gemini Vision layout QC."""
+    if not still_paths:
+        return "FAIL: Không chụp được ảnh still nào từ DynamicReel để kiểm tra."
+
+    # 1) Deterministic empty-frame / missing-hook / missing-visuals guard (never times out!)
+    try:
+        import cv2  # type: ignore
+        import numpy as np  # type: ignore
+
+        empty_errors: list[str] = []
+        for idx, sp in enumerate(still_paths, start=1):
+            if not sp.exists():
+                continue
+            img = cv2.imread(str(sp))
+            if img is None:
+                continue
+            top_roi = cv2.cvtColor(img[200:540, 60:1020], cv2.COLOR_BGR2GRAY)
+            mid_roi = cv2.cvtColor(img[540:1580, 60:1020], cv2.COLOR_BGR2GRAY)
+            top_edges = float(np.count_nonzero(cv2.Canny(top_roi, 60, 160))) / float(top_roi.size)
+            mid_edges = float(np.count_nonzero(cv2.Canny(mid_roi, 60, 160))) / float(mid_roi.size)
+            if top_edges < 0.004:
+                empty_errors.append(f"Beat {idx} TRỐNG VÙNG HOOK (Y:200..540 không có chữ Hook, edge={top_edges:.4f})")
+            if mid_edges < 0.004:
+                empty_errors.append(f"Beat {idx} TRỐNG VÙNG GIỮA (Y:540..1580 không có ảnh/đồ họa 3D, edge={mid_edges:.4f})")
+        if empty_errors:
+            return (
+                "FAIL (PHÁT HIỆN MÀN HÌNH TRỐNG TRƠN): " + "; ".join(empty_errors) +
+                ". NGUYÊN NHÂN THƯỜNG GẶP: dùng <Sequence from={...}> làm reset useCurrentFrame() về 0 khiến startFrame/interpolate bị ẩn, "
+                "hoặc opacity=0. BẮT BUỘC bỏ <Sequence>, dùng frame toàn cục và render từng Beat bằng `{frame >= from && frame < to && (...)}`!"
+            )
+    except Exception as exc:
+        print(f"[STILL-QC] OpenCV guard skipped: {exc}")
+
+    if not os.getenv("GEMINI_API_KEY", "").strip():
         return None
     raw_imgs = [p.read_bytes() for p in still_paths if p.exists()]
     if not raw_imgs:
@@ -1656,11 +1688,12 @@ CÁC COMPONENT CHUẨN CÓ SẴN & EXACT PROPS:
 
 YÊU CẦU KỸ THUẬT BẮT BUỘC:
 1. Export đúng: `export const DynamicReel: React.FC<{{ plan?: UniversalScenePlan }}> = ({{ plan = defaultPlan as unknown as UniversalScenePlan }}) => {{ ... }};`
-2. BẮT BUỘC render `<HaDaWhyFontFaces />` và `<HaDaWhyMistBackground intensity={0.11} accentHex="66, 178, 242" />` ở lớp nền, và `<ChannelWatermark9x16 />` ở lớp trên cùng!
-3. BẮT BUỘC dùng `<KineticHookHeader />` (hoặc `spring` slam) cho tiêu đề tầng trên (`top: 240..480px`), `maxWidth: 900`, ZERO-BOX (tuyệt đối CẤM `backgroundColor: "rgba(...,0.4..0.9)"` bọc chữ; chỉ dùng `WebkitTextStroke` + `textShadow`).
-4. Tầng giữa (`top: 520..1580px`): Phối hợp chuyển động đa lớp liên tục cho ảnh thật (`{json.dumps(harvested_list)}`), mọi ảnh BẮT BUỘC có chuyển động Ken Burns / Parallax / Scale suốt `durationFrames`, sử dụng `ScaleComparison3D` / `TimelineTrack3D` / `GeoStrategicMap3D` / số đếm Odometer / sơ đồ SVG tùy ngữ cảnh từng Beat.
-5. **KHÔNG ĐƯỢC ĐỨNG IM Ở CUỐI VIDEO:** Toàn bộ các `<Sequence>` phải nối tiếp kín 100% từ frame `0` đến hết tổng `durationFrames` (`{sum(b["durationFrames"] for b in scenes_brief)}` frames).
-6. CẤM tuyệt đối `objects/*_3d.png` (icon nhựa hoạt hình) và CẤM phụ đề karaoke đáy màn hình.
+2. **TUYỆT ĐỐI CẤM DÙNG `<Sequence>`!** (vì `<Sequence>` reset `useCurrentFrame()` về 0 làm hỏng `startFrame` của `KineticHookHeader`/`ScaleComparison3D`/`TimelineTrack3D`/`GeoStrategicMap3D`). Bắt buộc dùng `const frame = useCurrentFrame();` toàn cục và hiển thị từng Beat bằng điều kiện `{{frame >= fromFrame && frame < endFrame && (...)}}` giống hệt mẫu `RapPhimBongNgo42s.tsx`!
+3. BẮT BUỘC render `<HaDaWhyFontFaces />` và `<HaDaWhyMistBackground intensity={0.11} accentHex="66, 178, 242" />` ở lớp nền, và `<ChannelWatermark9x16 />` ở lớp trên cùng!
+4. BẮT BUỘC dùng `<KineticHookHeader beat={{...}} top={{280}} />` cho tiêu đề tầng trên (`maxWidth: 900`), ZERO-BOX (tuyệt đối CẤM `backgroundColor: "rgba(...,0.4..0.9)"` bọc chữ; chỉ dùng `WebkitTextStroke` + `textShadow`).
+5. Tầng giữa (`top: 520..1580px`): Phối hợp chuyển động đa lớp liên tục cho ảnh thật (`{json.dumps(harvested_list)}`), mọi ảnh BẮT BUỘC có chuyển động Ken Burns / Parallax / Scale suốt `durationFrames`, sử dụng `ScaleComparison3D` / `TimelineTrack3D` / `GeoStrategicMap3D` / số đếm Odometer / sơ đồ SVG tùy ngữ cảnh từng Beat.
+6. **KHÔNG ĐƯỢC ĐỨNG IM Ở CUỐI VIDEO:** Toàn bộ các Beat phải nối tiếp kín 100% từ frame `0` đến hết tổng `durationFrames` (`{sum(b["durationFrames"] for b in scenes_brief)}` frames).
+7. CẤM tuyệt đối `objects/*_3d.png` (icon nhựa hoạt hình) và CẤM phụ đề karaoke đáy màn hình.
 {ref_snippet}
 
 DỮ LIỆU CHOREOGRAPHY CÁC BEAT ({fps} fps):
