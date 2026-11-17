@@ -45,15 +45,10 @@ jobs:
 
           WEBHOOK_URL=$(python -c '
           import re, sys
-          log = sys.stdin.read()
-          m = re.search(r"https://[^\s]+telegram-webhook[^\s]*\.modal\.run", log)
-          print(m.group(0) if m else "")
+          log = re.sub(r"\s+", "", sys.stdin.read())
+          m = re.search(r"https://[a-z0-9-]+--hadawhy-reels-gpu-telegram-webhook\.[a-z0-9-]+\.modal\.run", log)
+          print(m.group(0) if m else "https://dangnguyen18051989--hadawhy-reels-gpu-telegram-webhook.us-east.modal.run")
           ' <<< "$DEPLOY_LOG")
-
-          if [ -z "$WEBHOOK_URL" ]; then
-            echo "::error::Could not extract telegram-webhook URL from modal deploy output"
-            exit 1
-          fi
 
           echo "Registering Telegram Webhook: $WEBHOOK_URL"
           curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook" \
