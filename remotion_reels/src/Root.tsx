@@ -108,7 +108,7 @@ export const Root: React.FC = () => {
         id="DynamicReel"
         component={DynamicReel}
         durationInFrames={1260}
-        fps={30}
+        fps={60}
         width={1080}
         height={1920}
         defaultProps={{
@@ -116,7 +116,7 @@ export const Root: React.FC = () => {
         }}
         calculateMetadata={({ props }) => {
           const p = (props?.plan || defaultUniversalPlan) as unknown as UniversalScenePlan;
-          const fps = p.fps || 30;
+          const fps = p.fps || 60;
           const maxEnd = (p.scenes || []).reduce((m, s) => Math.max(m, s.endSec || 0), 10);
           return {
             fps,

@@ -1000,26 +1000,35 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
 
     temp_dir.mkdir(parents=True, exist_ok=True)
     sfx_dir = REMOTION_DIR / "public" / "sfx"
-    sfx_map = {
-        "flow_diagram": sfx_dir / "gear_lock.mp3",
-        "bar_versus": sfx_dir / "bass_hit.mp3",
-        "evidence_stack": sfx_dir / "whoosh_big.mp3",
-        "dossier_stamp": sfx_dir / "metal_hit.mp3",
-        "odometer_shock": sfx_dir / "bass_hit.mp3",
-        "cutout_ar_stage": sfx_dir / "zoom_hit.mp3",
-        "split_versus": sfx_dir / "whoosh_big.mp3",
-        "headline_evidence": sfx_dir / "whoosh_big.mp3",
-        "timeline_reveal": sfx_dir / "gear_lock.mp3",
-        "hero_prop": sfx_dir / "bass_hit.mp3",
-        "stat_odometer": sfx_dir / "bass_hit.mp3",
-        "compare_two": sfx_dir / "metal_hit.mp3",
-        "bar_compare": sfx_dir / "metal_hit.mp3",
-        "sat_map": sfx_dir / "whoosh_big.mp3",
-        "archival_proof": sfx_dir / "whoosh_big.mp3",
-        "two_tier": sfx_dir / "zoom_hit.mp3",
-        "split_duo": sfx_dir / "zoom_hit.mp3",
+    foley_dir = BASE_DIR / "assets" / "foleys"
+    sfx_pools: dict[str, list[Path]] = {
+        "flow_diagram": [sfx_dir / "gear_lock.mp3", sfx_dir / "cut.mp3", foley_dir / "keyboard_clack.wav"],
+        "bar_versus": [foley_dir / "boom_drop.wav", sfx_dir / "bass_hit.mp3", foley_dir / "impact.wav"],
+        "evidence_stack": [sfx_dir / "whoosh1.mp3", foley_dir / "camera_click.wav", sfx_dir / "whoosh2.mp3"],
+        "dossier_stamp": [foley_dir / "gavel_slam_norm.wav", sfx_dir / "metal_hit.mp3", foley_dir / "gavel_thud.wav"],
+        "odometer_shock": [foley_dir / "braaam.wav", foley_dir / "kaching.wav", sfx_dir / "bass_hit.mp3"],
+        "cutout_ar_stage": [sfx_dir / "zoom_hit.mp3", sfx_dir / "whoosh3.mp3", sfx_dir / "hit_blow.mp3"],
+        "split_versus": [sfx_dir / "whoosh2.mp3", sfx_dir / "glitch.mp3", foley_dir / "impact.wav"],
+        "headline_evidence": [foley_dir / "camera_click.wav", sfx_dir / "whoosh_big.mp3", sfx_dir / "cut.mp3"],
+        "timeline_reveal": [sfx_dir / "gear_lock.mp3", foley_dir / "cash_flip.wav", sfx_dir / "whoosh1.mp3"],
     }
-    bgm_path = BASE_DIR / "assets" / "music" / "hadawhy_mystery_bgm.mp3"
+    default_pool = [
+        sfx_dir / "whoosh1.mp3", foley_dir / "boom_drop.wav", sfx_dir / "whoosh2.mp3",
+        foley_dir / "impact.wav", sfx_dir / "zoom_hit.mp3", sfx_dir / "whoosh3.mp3",
+    ]
+
+    theme_bgm_map = {
+        "tech_cyber": "tension_intro_epic.mp3",
+        "noir_dossier": "clock_ticking_teaser.mp3",
+        "finance_vox": "master_cinematic_bgm.mp3",
+        "retail_warm": "cinematic_documentary_bgm_real.mp3",
+    }
+    theme_name = str(plan.get("theme", "")).strip()
+    bgm_name = theme_bgm_map.get(theme_name, "hadawhy_mystery_bgm.mp3")
+    bgm_path = BASE_DIR / "assets" / "music" / bgm_name
+    if not bgm_path.exists():
+        bgm_path = BASE_DIR / "assets" / "music" / "hadawhy_mystery_bgm.mp3"
+    print(f"[BGM] Theme='{theme_name or 'default'}' -> {bgm_path.name}")
 
     # Initialize VieNeu-TTS (channel voice: Hải Đăng)
     vieneu_client = None
@@ -1151,25 +1160,30 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
         json.dumps(blueprint, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    # 2. Rich Multi-Layer Contextual SFX Hooks (scene impact + odometer ticks + causal pops + infoTags)
+    # 2. Rich Multi-Layer Contextual SFX Hooks (rotate diverse SFX per scene, never repeat same sound back-to-back)
     sfx_entries: list[tuple[Path, int, float]] = []
-    sfx_map["causal_chain"] = sfx_dir / "gear_lock.mp3"
     tick_sfx = sfx_dir / "tick.mp3"
-    coin_sfx = sfx_dir / "coin1.mp3"
+    coin_sfx = foley_dir / "kaching.wav" if (foley_dir / "kaching.wav").exists() else sfx_dir / "coin1.mp3"
     lock_sfx = sfx_dir / "lock.mp3"
     pop_sfx = sfx_dir / "pop.mp3"
     pop_dry_sfx = sfx_dir / "pop_dry.mp3"
-    whoosh_sfx = sfx_dir / "whoosh1.mp3"
+    whoosh_sfx = sfx_dir / "whoosh2.mp3"
+    last_sfx_name = ""
 
-    for scene in scenes:
+    for sc_idx, scene in enumerate(scenes):
         s0_ms = max(0, int(round(float(scene.get("startSec", 0)) * 1000)))
         s_dur_ms = max(1000, int(round((float(scene.get("endSec", 0)) - float(scene.get("startSec", 0))) * 1000)))
         layout = str(scene.get("layout", ""))
 
-        # Primary scene entrance impact
-        sfx_file = sfx_map.get(layout, sfx_dir / "bass_hit.mp3")
-        if sfx_file.exists():
-            sfx_entries.append((sfx_file, s0_ms, 0.80))
+        pool = [p for p in sfx_pools.get(layout, default_pool) if p.exists()]
+        if not pool:
+            pool = [p for p in default_pool if p.exists()]
+        if pool:
+            sfx_file = pool[sc_idx % len(pool)]
+            if sfx_file.name == last_sfx_name and len(pool) > 1:
+                sfx_file = pool[(sc_idx + 1) % len(pool)]
+            last_sfx_name = sfx_file.name
+            sfx_entries.append((sfx_file, s0_ms, 0.78))
 
         # Odometer rolling ticks + jackpot/lock ding
         if layout in ("stat_odometer", "odometer_shock"):
@@ -1586,8 +1600,9 @@ YÊU CẦU KỸ THUẬT BẮT BUỘC:
 1. Export đúng: `export const DynamicReel: React.FC<{{ plan?: UniversalScenePlan }}> = ({{ plan = defaultPlan as unknown as UniversalScenePlan }}) => {{ ... }};`
 2. BẮT BUỘC render `<HaDaWhyFontFaces />` và `<HaDaWhyMistBackground intensity={0.11} accentHex="66, 178, 242" />` ở lớp nền, và `<ChannelWatermark9x16 />` ở lớp trên cùng!
 3. BẮT BUỘC dùng `<KineticHookHeader />` (hoặc `spring` slam) cho tiêu đề tầng trên (`top: 240..480px`), `maxWidth: 900`, ZERO-BOX (tuyệt đối CẤM `backgroundColor: "rgba(...,0.4..0.9)"` bọc chữ; chỉ dùng `WebkitTextStroke` + `textShadow`).
-4. Tầng giữa (`top: 520..1580px`): Phối hợp chuyển động đa lớp cho ảnh thật (`{json.dumps(harvested_list)}`), sử dụng `ScaleComparison3D` / `TimelineTrack3D` / `GeoStrategicMap3D` / số đếm Odometer / sơ đồ SVG tùy ngữ cảnh từng Beat. Nếu kịch bản nhắc quốc gia/thế giới, ưu tiên dùng `<GeoStrategicMap3D />` hoặc `<svg>`.
-5. CẤM tuyệt đối `objects/*_3d.png` (icon nhựa hoạt hình) và CẤM phụ đề karaoke đáy màn hình.
+4. Tầng giữa (`top: 520..1580px`): Phối hợp chuyển động đa lớp liên tục cho ảnh thật (`{json.dumps(harvested_list)}`), mọi ảnh BẮT BUỘC có chuyển động Ken Burns / Parallax / Scale suốt `durationFrames`, sử dụng `ScaleComparison3D` / `TimelineTrack3D` / `GeoStrategicMap3D` / số đếm Odometer / sơ đồ SVG tùy ngữ cảnh từng Beat.
+5. **KHÔNG ĐƯỢC ĐỨNG IM Ở CUỐI VIDEO:** Toàn bộ các `<Sequence>` phải nối tiếp kín 100% từ frame `0` đến hết tổng `durationFrames` (`{sum(b["durationFrames"] for b in scenes_brief)}` frames).
+6. CẤM tuyệt đối `objects/*_3d.png` (icon nhựa hoạt hình) và CẤM phụ đề karaoke đáy màn hình.
 {ref_snippet}
 
 DỮ LIỆU CHOREOGRAPHY CÁC BEAT ({fps} fps):
@@ -1681,8 +1696,7 @@ CHỈ trả về code TypeScript hoàn chỉnh cho `DynamicReel.tsx` (bắt đ�
 
     if safe_backup:
         dyn_path.write_text(safe_backup, encoding="utf-8")
-    print("[AGENT-4 TSX] Falling back to HaDaWhyUniversal9x16")
-    return "HaDaWhyUniversal9x16"
+    raise RuntimeError("Agent-4 TSX failed to produce a clean DynamicReel.tsx after 3 attempts (refusing to fallback to legacy template)")
 
 
 def mode_render() -> Path:
