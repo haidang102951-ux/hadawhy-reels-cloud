@@ -1028,7 +1028,36 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
     bgm_path = BASE_DIR / "assets" / "music" / bgm_name
     if not bgm_path.exists():
         bgm_path = BASE_DIR / "assets" / "music" / "hadawhy_mystery_bgm.mp3"
-    print(f"[BGM] Theme='{theme_name or 'default'}' -> {bgm_path.name}")
+
+    # Hook-text kinetic slam SFX pool (rotated continuously so every Hook sounds fresh)
+    hook_sfx_pool = [
+        p for p in (
+            foley_dir / "braaam.wav",
+            foley_dir / "boom_drop.wav",
+            foley_dir / "gavel_slam_norm.wav",
+            foley_dir / "impact.wav",
+            sfx_dir / "hit_blow.mp3",
+            sfx_dir / "zoom_hit.mp3",
+            sfx_dir / "bass_hit.mp3",
+            sfx_dir / "metal_hit.mp3",
+        )
+        if p.exists()
+    ]
+    accent_sfx_pool = [
+        p for p in (
+            foley_dir / "camera_click.wav",
+            foley_dir / "keyboard_clack.wav",
+            foley_dir / "cash_flip.wav",
+            foley_dir / "kaching.wav",
+            foley_dir / "heartbeat.wav",
+            sfx_dir / "glitch.mp3",
+            sfx_dir / "cut.mp3",
+            sfx_dir / "whoosh1.mp3",
+            sfx_dir / "whoosh2.mp3",
+            sfx_dir / "whoosh3.mp3",
+        )
+        if p.exists()
+    ]
 
     # Initialize VieNeu-TTS (channel voice: Hải Đăng)
     vieneu_client = None
@@ -1185,6 +1214,15 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
             last_sfx_name = sfx_file.name
             sfx_entries.append((sfx_file, s0_ms, 0.78))
 
+        # Rotating Hook-text slam + mid-scene foley accent so every Hook & transition sounds unique
+        if hook_sfx_pool:
+            hk_sfx = hook_sfx_pool[(sc_idx * 3 + 1) % len(hook_sfx_pool)]
+            if hk_sfx.name != last_sfx_name:
+                sfx_entries.append((hk_sfx, s0_ms + 80, 0.62))
+        if accent_sfx_pool and s_dur_ms > 1500:
+            ac_sfx = accent_sfx_pool[(sc_idx * 5 + 2) % len(accent_sfx_pool)]
+            sfx_entries.append((ac_sfx, s0_ms + min(750, s_dur_ms // 2), 0.55))
+
         # Odometer rolling ticks + jackpot/lock ding
         if layout in ("stat_odometer", "odometer_shock"):
             if tick_sfx.exists():
@@ -1238,6 +1276,26 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
         filters.append(f"[{idx_counter}:a]adelay={delay_ms}|{delay_ms},volume={vol:.2f}[{lbl}]")
         sfx_labels.append(f"[{lbl}]")
         idx_counter += 1
+
+    # Generate bespoke 5-beat Hollywood Trailer BGM per script via ACE-Step / Procedural Composer
+    try:
+        sys.path.insert(0, str(BASE_DIR / "engine"))
+        from ace_step_fb_runner import ACEStepFBRunner  # type: ignore
+        bespoke_bgm = temp_dir / "bespoke_5beat_bgm.mp3"
+        beat_ts = [float(sc.get("startSec", 0)) for sc in scenes]
+        full_script_txt = " ".join(str(sc.get("narration", "")) for sc in scenes)
+        ACEStepFBRunner().generate_unique_script_bgm(
+            script_topic=str(plan.get("projectTitle", "HaDaWhy")),
+            output_path=bespoke_bgm,
+            duration_sec=total_dur + 0.5,
+            script_text=full_script_txt,
+            beat_timestamps=beat_ts,
+        )
+        if bespoke_bgm.exists() and bespoke_bgm.stat().st_size > 10000:
+            bgm_path = bespoke_bgm
+            print(f"[BGM-ACE] Generated unique 5-beat bespoke trailer score: {bgm_path.name}")
+    except Exception as exc:
+        print(f"[BGM-ACE] Bespoke score fallback to {bgm_path.name}: {exc}")
 
     bgm_label: str | None = None
     if bgm_path.exists():

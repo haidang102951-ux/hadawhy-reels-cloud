@@ -37,7 +37,7 @@ if sys.stdout:
         pass
 
 
-FB_BRAIN_DIR = Path(r"D:\Đầu Não Video Ngắn FB (không xóa)")
+FB_BRAIN_DIR = Path(__file__).resolve().parent.parent
 LEDGER_PATH = FB_BRAIN_DIR / "engine" / "bgm_fingerprint_ledger.json"
 
 # Bảng phân tích DNA cảm xúc kịch bản từ nội dung văn bản
