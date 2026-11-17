@@ -231,22 +231,48 @@ _STOCK_WATERMARK_DOMAINS = (
 
 
 def _call_gemini_vision(prompt: str, images_bytes: list[bytes], max_tokens: int = 256) -> str | None:
-    """Call Gemini Vision API (gemini-2.5-flash / gemini-flash-latest) with JPEG thumbnails."""
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not api_key or not images_bytes:
+    """Call MotAPI Vision (primary) or Gemini Vision API with JPEG thumbnails."""
+    if not images_bytes:
         return None
     import base64
     import requests  # type: ignore
     from PIL import Image  # type: ignore
 
-    parts: list[dict] = [{"text": prompt}]
+    b64_list: list[str] = []
     for raw in images_bytes:
         with Image.open(io.BytesIO(raw)) as im:
             thumb = im.convert("RGB")
             thumb.thumbnail((768, 768))
             buf = io.BytesIO()
             thumb.save(buf, "JPEG", quality=82)
-            b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            b64_list.append(base64.b64encode(buf.getvalue()).decode("ascii"))
+
+    motapi_key = os.getenv("MOTAPI_KEY", "").strip()
+    if motapi_key:
+        content: list[dict] = [{"type": "text", "text": prompt}]
+        for b64 in b64_list:
+            content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
+        for m_model in ("gemini-4-hydrogen", "claude-sonnet-4-6"):
+            try:
+                r = requests.post(
+                    "https://motapis.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {motapi_key}", "Content-Type": "application/json"},
+                    json={"model": m_model, "messages": [{"role": "user", "content": content}], "max_tokens": max_tokens, "temperature": 0.1},
+                    timeout=35,
+                )
+                if r.ok:
+                    ans = str((r.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
+                    if ans:
+                        return ans
+            except Exception as exc:
+                print(f"[MOTAPI-VISION] {m_model} error: {exc}")
+
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        return None
+
+    parts: list[dict] = [{"text": prompt}]
+    for b64 in b64_list:
         parts.append({"inlineData": {"mimeType": "image/jpeg", "data": b64}})
 
     for model in ("gemini-2.5-flash", "gemini-flash-latest"):
@@ -564,7 +590,22 @@ def _call_gemini_json(prompt: str, require_scenes: bool = True) -> dict:
 
     last_err = None
 
-    # 1. DeepSeek official API (ưu tiên số 1 nếu có DEEPSEEK_API_KEY — cực nhanh & ổn định)
+    # 0. MotAPI Gateway (ưu tiên số 1 nếu có MOTAPI_KEY)
+    motapi_key = os.getenv("MOTAPI_KEY", "").strip()
+    if motapi_key:
+        for m_model in ("deepseek-v4.1-flash-1017", "claude-sonnet-4-6"):
+            res = _call_openai_compat_json(
+                "https://motapis.com/v1/chat/completions",
+                motapi_key,
+                m_model,
+                prompt,
+                f"MOTAPI/{m_model}",
+                require_scenes=require_scenes,
+            )
+            if res is not None:
+                return res
+
+    # 1. DeepSeek official API (ưu tiên nếu có DEEPSEEK_API_KEY)
     deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
     if deepseek_key:
         res = _call_openai_compat_json(
@@ -1471,8 +1512,28 @@ def _agent_6_thumbnail_and_seo(plan: dict) -> tuple[Path | None, str]:
 
 
 def _call_llm_text(prompt: str) -> str:
-    """Call DeepSeek (primary if key set) / Gemini / GitHub Models / OpenRouter for raw TSX code generation."""
+    """Call MotAPI Claude/DeepSeek (primary) / DeepSeek / Gemini / GH Models / OpenRouter for raw TSX code."""
     import requests  # type: ignore
+
+    motapi_key = os.getenv("MOTAPI_KEY", "").strip()
+    if motapi_key:
+        for m_model in ("claude-sonnet-4-6", "claude-sonnet-5", "deepseek-v4.1-flash-1017"):
+            try:
+                print(f"[AGENT-4 TSX] Calling MotAPI {m_model}...")
+                r = requests.post(
+                    "https://motapis.com/v1/chat/completions",
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {motapi_key}"},
+                    json={"model": m_model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 8192},
+                    timeout=90,
+                )
+                if r.ok:
+                    text = str(r.json()["choices"][0]["message"]["content"]).strip()
+                    if "export const DynamicReel" in text:
+                        return text
+                else:
+                    print(f"[AGENT-4 TSX] MotAPI {m_model} HTTP {r.status_code}: {r.text[:200]}")
+            except Exception as exc:
+                print(f"[AGENT-4 TSX] MotAPI {m_model} error: {exc}")
 
     deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
     if deepseek_key:
@@ -1813,7 +1874,7 @@ def mode_render() -> Path:
     # Bước C & D: AI tự viết TSX + tsc + pre_render_gate + Vision Still QC
     has_any_llm = any(
         os.getenv(k, "").strip()
-        for k in ("GEMINI_API_KEY", "GH_MODELS_TOKEN", "OPENROUTER_API_KEY", "DEEPSEEK_API_KEY")
+        for k in ("MOTAPI_KEY", "DEEPSEEK_API_KEY", "GEMINI_API_KEY", "GH_MODELS_TOKEN", "OPENROUTER_API_KEY")
     )
     comp_id = _agent_4_tsx_director(plan) if has_any_llm else "CinematicReel"
     print(f"[RENDER] Using Remotion composition: {comp_id} @ {plan.get('fps', 60)}fps")
