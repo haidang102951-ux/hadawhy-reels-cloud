@@ -1,0 +1,30 @@
+{
+  "version": "2026-11-16",
+  "channel_positioning": "HaDa WHY (@hadawhy) KHÔNG làm kênh tài chính thuần túy. Chuyên GÓC KHUẤT XÃ HỘI và BÍ ẨN BÊN TRONG SỰ VIỆC (chữ WHY) có từ khóa tìm kiếm thực tế cao trên Google/YouTube.",
+  "mandatory_channel_dna": {
+    "backdrop": "<HaDaWhyMistBackground intensity={0.11} accentHex=\"66, 178, 242\" /> (Nền đen sâu Obsidian + sương mù xanh thương hiệu #42B2F2 Mức 1 rất nhẹ. CẤM lưới ô vuông, CẤM tự đổi màu nền sang vàng/đỏ).",
+    "layout_2_layers": "Tầng trên (Y:220..520px) chữ Hook Slam 2 dòng nổi bật; Tầng giữa (Y:520..1580px) 100% cho minh họa 3D + tư liệu thật; CẤM phụ đề karaoke đáy màn hình (KineticWordCaption).",
+    "suspense_reveal": "Câu hỏi đặt vấn đề PHẢI giữ bí mật bằng bối cảnh + dấu ? phát sáng; CHỈ bung đáp án 3D khi lời thoại đọc đến câu trả lời.",
+    "image_quality_gate": "Mọi ảnh tải về bắt buộc >= 800x500px (hoặc >= 650x450px cho prop 3D) và Laplacian sharpness >= 45.0; tuyệt đối cấm ảnh mờ nhòe vỡ hạt.",
+    "real_video_broll": "Với kịch bản đời thật/sự kiện thật: ưu tiên cào VIDEO B-roll thật sắc nét (>=720p, sạch watermark/phụ đề, lưu public/harvested/*.mp4) đưa vào khung minh họa tầng giữa bằng <OffthreadVideo muted /> trên nền ADN #42B2F2 Mức 1 thay vì chỉ dùng ảnh tĩnh.",
+    "audio_sync_gate": "1 luồng nhạc nền liền mạch mượt (CẤM cắt nối 5 khúc rời rạc, CẤM tích tắc đồng hồ rền rĩ); SFX phải khớp đúng frame vật thể/Hook xuất hiện (±30ms, CẤM trễ +280ms); Vacuum Drop ramp mượt 120ms + Sidechain Ducking.",
+    "pre_render_and_qc": "Bắt buộc pass pre_render_gate.py -> soi npx remotion still từng Beat -> render full -> mux -> AutoQCFBReels >= 95/100 + nghe trực tiếp audio trước khi báo cáo."
+  },
+  "continuous_improvement_protocol": "Sau mỗi video, mọi góp ý của Người Chỉ Huy phải được mã hóa thành check tự động trong pre_render_gate.py hoặc auto_qc_fb_reels.py để lỗi cũ không bao giờ tái diễn.",
+  "iron_upgrades_2026_11": [
+    "ZERO PLASTIC *_3d.png EMOJI ICONS: Đã xóa vĩnh viễn. Dùng 100% ảnh thật HD (>=900px, Laplacian>=60), ảnh tư liệu cổ đúng giai đoạn lịch sử, và cutout khử viền mịn.",
+    "LOCKED FONTS & KINETIC HOOK: Bắt buộc dùng <HaDaWhyFontFaces /> + <KineticHookHeader /> (KanitBlack / BeVietnamProBlack + Spring Slam 1.38->1.0 Zero-Box).",
+    "NO LONELY SINGLE PHOTOS: Mọi phân cảnh phải có bố cục đa lớp sinh động (ảnh phụ, cutout, đường nối nét đứt chuyển động, thẻ dẫn chứng) giống chuẩn Vietjet/Friday13/Nvidia.",
+    "CONTINUOUS RHYTHMIC VOICEOVER: Cấm chèn khoảng lặng chết > 1.0s để kéo dài video; nghỉ nhịp tự nhiên 0.35-0.45s, Vacuum Drop tối đa 0.65s.",
+    "FRAME-SYNCED SFX & -14.0 LUFS: Đặt SFX khớp chính xác từng điểm chuyển Hook theo words.json, bù gain SFX nhỏ, chuẩn hóa -14.0 LUFS.",
+    "MANDATORY PARALLEL SUB-AGENT DELEGATION: Tổng chỉ huy bắt buộc chia việc song song cho 5 sub-agents chuyên trách đã được huấn luyện chuẩn."
+  ],
+  "master_upgrade_5_pillars_2026_11": [
+    "1. CHOREOGRAPHY BLUEPRINT MANDATORY: Trước khi cào ảnh & code Remotion, Con Tổng + Biên Kịch bắt buộc lập `choreography_blueprint.json` định nghĩa ẩn dụ chuyển động vật lý riêng cho từng Beat (cấm 2 Beat liên tiếp lặp lại cùng khuôn khung ảnh chữ nhật bo góc).",
+    "2. BENCHMARK ESCALATION GATE: Mọi video mới phải lấy NvidiaSuccession40s / Friday13Origins45s / RapPhimBongNgo42s làm sàn chuẩn tối thiểu và có ít nhất 1 cơ chế diễn hoạt vượt trội hơn.",
+    "3. MATCH-CUT & EVIDENCE HIGHLIGHTS: Bắt buộc có thẻ dẫn chứng nguồn tô vàng (WHO, báo cáo, hồ sơ) cho các con số lớn và chuyển cảnh nối mạch Match-Cut giữa các Beat.",
+    "4. 5-ACT MOVIE TRAILER BGM + SPECTRAL POCKET: Nhạc nền phải có cấu trúc 5 Hồi Trailer Phim (Riser + Braaam + Staccato Strings + Crescendo + Vacuum Drop 0.65s + Impact), cắt rãnh -5dB tại 2.2-2.8kHz + Sidechain Ducking.",
+    "5. VOICE-FIRST AUDIO HIERARCHY: Giọng đọc Hải Đăng luôn ở ngôi thượng tầng; cả BGM lẫn SFX tuyệt đối không được lớn hơn hoặc át giọng đọc (SFX chỉ điểm ở điểm chuyển Hook/khe nghỉ, cắt gọn đuôi không đè chữ).",
+    "6. ANTI-HARSHNESS WARM CINEMA MASTERING: Không nghe chói tai/khó chịu: hãm nhẹ dải gắt 4kHz-7kHz trên các SFX kim loại/glitch và giọng đọc (tránh boost 3.5kHz quá tay), khóa True Peak <= -1.5 dBTP, âm thanh ấm, dày, không méo rè."
+  ]
+}

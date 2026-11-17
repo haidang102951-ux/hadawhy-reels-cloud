@@ -45,7 +45,10 @@ image = (
         "google-genai",
         "vieneu",
         "edge-tts",
-        "rembg[cpu]",
+        "rembg[gpu]",
+        "onnxruntime-gpu",
+        "opencv-python-headless",
+        "numpy",
         "pillow",
         "requests",
     )

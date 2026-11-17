@@ -229,38 +229,21 @@ class ACEStepFBRunner:
         buf_l = [0.0] * n_samples
         buf_r = [0.0] * n_samples
 
-        # 1. Đặt cú nổ Sub-Bass Braaam + Impact tại đầu mỗi Beat của kịch bản
+        # 1. Đặt cú nổ Sub-Bass Braaam êm gọn tại đúng đầu các mốc Beat chính (bỏ tiếng tích tắc rền rĩ gây rối tai)
         for b_idx, bt in enumerate(beats):
+            if b_idx not in (0, 2, 4):
+                continue
             i0 = int(bt * sr)
-            b_dur = 2.2 if b_idx == 0 else 1.6
+            b_dur = 1.6 if b_idx == 0 else 1.2
             blen = min(int(b_dur * sr), n_samples - i0)
             for j in range(blen):
                 lt = j / sr
-                f_drop = max(30.0, 95.0 * math.exp(-lt * 4.2))
-                sub_hit = math.sin(2.0 * math.pi * f_drop * lt) * math.exp(-lt * 2.6)
-                phase = (lt * base_f) % 1.0
-                saw = 2.0 * phase - 1.0
-                brass = math.tanh((saw + 0.5 * math.sin(2.0 * math.pi * base_f * 2.0 * lt)) * 3.0)
-                env = min(1.0, lt / 0.04) * math.exp(-lt * 1.3)
-                val = (sub_hit * 0.65 + brass * 0.35) * env * (0.55 if b_idx == 0 else 0.38)
+                f_drop = max(34.0, 88.0 * math.exp(-lt * 4.5))
+                sub_hit = math.sin(2.0 * math.pi * f_drop * lt) * math.exp(-lt * 3.0)
+                env = min(1.0, lt / 0.03) * math.exp(-lt * 1.6)
+                val = sub_hit * env * (0.42 if b_idx == 0 else 0.28)
                 buf_l[i0 + j] += val
                 buf_r[i0 + j] += val
-
-        # 2. Tiếng kim đồng hồ cơ khí tích tắc (Binaural Clockwork Countdown) khớp chính xác BPM kịch bản
-        total_eighths = int(duration_sec / (spb * 0.5))
-        tick_f1 = 3100.0 * pitch_factor
-        tick_f2 = 5400.0 * pitch_factor
-        for e_idx in range(total_eighths):
-            et = e_idx * (spb * 0.5)
-            i0 = int(et * sr)
-            tlen = min(int(0.032 * sr), n_samples - i0)
-            pan_l = 0.75 if (e_idx % 2 == 0) else 0.25
-            pan_r = 1.0 - pan_l
-            for j in range(tlen):
-                lt = j / sr
-                tick = (math.sin(2.0 * math.pi * tick_f1 * lt) * 0.6 + math.sin(2.0 * math.pi * tick_f2 * lt) * 0.4) * math.exp(-lt * 150.0) * 0.18
-                buf_l[i0 + j] += tick * pan_l
-                buf_r[i0 + j] += tick * pan_r
 
         # Ghi ra WAV stereo
         with wave.open(str(out_wav), "w") as wf:
@@ -284,7 +267,11 @@ class ACEStepFBRunner:
             from gradio_client import Client
 
             gen_duration = min(120.0, max(20.0, round(duration_sec + 2.0, 1)))
-            prompt = f"{dna['style_prompt']}, {dna['bpm']} BPM, {dna['key']}"
+            prompt = (
+                f"{dna['style_prompt']}, {dna['bpm']} BPM, {dna['key']}, "
+                "dynamic 5-act short documentary trailer score: immediate punchy hook impact at 0s, "
+                "curious investigative tension build in middle, dramatic reveal swell, clean studio mix, no vocal"
+            )
             client = Client("Reubencf/Kiku-ACE-Step-15")
             status, gradio_audio_path = client.predict(
                 prompt,
@@ -306,6 +293,38 @@ class ACEStepFBRunner:
         except Exception as e:
             print(f"[ACE-STEP CLOUD INFO] Chuyển sang Bộ Tổng Hợp Giao Hưởng 5 Nhịp Độc Bản ({e})")
         return False
+
+    @staticmethod
+    def _per_second_db(path: Path) -> list:
+        """Đo độ to RMS (dBFS) từng giây của file nhạc để phát hiện đoạn hụt/im lặng."""
+        import numpy as np
+        p = subprocess.run(
+            ["ffmpeg", "-v", "error", "-i", str(path), "-ac", "1", "-ar", "8000", "-f", "s16le", "-"],
+            capture_output=True,
+        )
+        a = np.frombuffer(p.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+        n = len(a) // 8000
+        if n == 0:
+            return []
+        seg = a[: n * 8000].reshape(n, 8000)
+        rms = np.sqrt(np.mean(seg ** 2, axis=1)) + 1e-9
+        return [float(20 * np.log10(x)) for x in rms]
+
+    @staticmethod
+    def _find_continuous_offset(db: list, need_sec: float, floor_db: float = -30.0, max_dip_db: float = 12.0):
+        """Tìm điểm bắt đầu sao cho mọi giây trong [off, off+need) đều >= floor_db và không tụt quá max_dip_db so với trung vị."""
+        import math as _m
+        need = int(_m.ceil(need_sec))
+        if len(db) < need:
+            return None
+        for off in range(0, len(db) - need + 1):
+            win = db[off: off + need - 1]  # bỏ giây cuối (fade-out)
+            if not win:
+                continue
+            med = sorted(win)[len(win) // 2]
+            if min(win) >= floor_db and min(win) >= med - max_dip_db:
+                return off
+        return None
 
     def compose_bespoke_5beat_trailer_bgm(
         self,
@@ -336,92 +355,105 @@ class ACEStepFBRunner:
             f"Key: {dna['key']} ({dna['pitch_semitones']:+d} st) | BPM: {dna['bpm']} | Recipe: {dna['recipe_id']}"
         )
 
-        t_intro = self.master_music_dir / "tension_intro_epic.mp3"
-        t_clock = self.master_music_dir / "clock_ticking_teaser.mp3"
-        t_orch = self.master_music_dir / "investigation_dark" / "dark_investigation_orchestral_03.mp3"
-        t_clim = self.master_music_dir / "victory_climax" / "epic_victory_climax_01.mp3"
-        t_ind = Path(r"D:\Đầu Não (không xóa)\engine\remotion_3d\public\audio\bgm\bgm_dark_industrial_tech.mp3")
-        if not t_ind.exists():
-            t_ind = self.master_music_dir / "investigation_dark" / "dark_investigation_tension_01.mp3"
-
         # Tạo lớp xung chấn vật lý Procedural mới 100% theo đúng các mốc Beat của kịch bản này
         proc_accent_wav = output_path.with_name(f"._proc_accent_{output_path.stem}.wav")
         self._synthesize_procedural_trailer_accent_layer(proc_accent_wav, duration_sec, dna)
 
-        # Thử gọi thêm lớp AI ACE-Step Cloud (với lyrics="") nếu khả dụng để hòa trộn
+        # Thử gọi lớp AI ACE-Step Cloud (với lyrics="") để sinh bản nhạc mới liền mạch
         cloud_ai_wav = output_path.with_name(f"._cloud_ace_{output_path.stem}.wav")
         has_cloud_ai = self._try_cloud_ace_step_generation(dna, duration_sec, cloud_ai_wav)
 
-        pitch_rate = round(math.pow(2.0, dna["pitch_semitones"] / 12.0), 6)
-        orch_pitch_rate = round(0.8908987 * pitch_rate, 6)
-        inv_tempo = round(1.0 / pitch_rate, 4)
-        inv_tempo_clamped = max(0.5, min(2.0, inv_tempo))
-        orch_tempo = max(0.5, min(2.0, round(dna["tempo_mult"] / pitch_rate, 4)))
+        ledger = self._load_ledger()
+        used_tracks = set(ledger.get("used_tracks", []))
 
-        b1_st, b2_st, b3_st, b4_st, b5_st = dna["offsets"]
-        beats = dna["beats"]
-        d1 = max(4.0, round(beats[1] - beats[0] + 0.6, 2))
-        d2 = max(4.0, round(beats[2] - beats[1] + 0.6, 2))
-        d3 = max(4.0, round(beats[3] - beats[2] + 0.6, 2))
-        d4 = max(4.0, round(beats[4] - beats[3] + 0.6, 2))
-        d5 = max(4.0, round(duration_sec - beats[4] + 0.8, 2))
+        # Pool nhạc thật đa dạng theo DNA chủ đề (không lặp lại 1 bài cũ cố định)
+        topic_lower = f"{script_topic} {mood}".lower()
+        if any(k in topic_lower for k in ("tài chính", "tiền", "lãi", "rạp", "bỏng ngô", "giá", "chứng khoán", "kinh doanh", "finance")):
+            pool_dirs = ["wallstreet_finance", "investigation_dark", "victory_climax"]
+        elif any(k in topic_lower for k in ("ai", "chip", "nvidia", "deepseek", "công nghệ", "tech", "robot", "cyber")):
+            pool_dirs = ["cyber_deepseek_ai", "wallstreet_finance", "victory_climax"]
+        else:
+            pool_dirs = ["investigation_dark", "victory_climax", "wallstreet_finance"]
 
-        ms_b2 = int(beats[1] * 1000)
-        ms_b3 = int(beats[2] * 1000)
-        ms_b4 = int(beats[3] * 1000)
-        ms_b5 = int(beats[4] * 1000)
+        candidate_tracks: list[Path] = []
+        for dname in pool_dirs:
+            dpath = self.master_music_dir / dname
+            if dpath.exists():
+                candidate_tracks.extend(sorted(dpath.glob("*.mp3")))
+        if not candidate_tracks:
+            candidate_tracks = sorted(self.master_music_dir.glob("*.mp3"))
+
+        fresh_tracks = [p for p in candidate_tracks if p.name not in used_tracks]
+        ordered = fresh_tracks + [p for p in candidate_tracks if p not in fresh_tracks]
+        rot = abs(hash(dna["recipe_id"])) % max(1, len(fresh_tracks) or len(ordered))
+        ordered = ordered[rot:] + ordered[:rot] if not fresh_tracks else fresh_tracks[rot:] + fresh_tracks[:rot] + ordered[len(fresh_tracks):]
+
+        # CỔNG LIỀN MẠCH NHẠC NỀN: bản AI cloud phải đủ to từng giây (cấm hụt/im lặng ở Hook hay giữa bài)
+        if has_cloud_ai and cloud_ai_wav.exists() and cloud_ai_wav.stat().st_size > 20000:
+            cloud_db = self._per_second_db(cloud_ai_wav)
+            cloud_off = self._find_continuous_offset(cloud_db, duration_sec)
+            if cloud_off is None:
+                print(f"[BGM CONTINUITY GATE] Loại bản AI cloud (hụt/im lặng): {[round(x) for x in cloud_db[:24]]}")
+                has_cloud_ai = False
+            else:
+                cloud_start = float(cloud_off)
+
+        chosen_track = None
+        start_off = 0.0
+        if not has_cloud_ai:
+            for cand in ordered:
+                off = self._find_continuous_offset(self._per_second_db(cand), duration_sec)
+                if off is not None:
+                    chosen_track, start_off = cand, float(off)
+                    break
+                print(f"[BGM CONTINUITY GATE] Loại bài kho (có đoạn hụt/im lặng): {cand.name}")
+            if chosen_track is None:
+                raise RuntimeError("Không có bài nhạc nền nào đạt cổng liền mạch (mọi giây >= -26 dB). Bổ sung nhạc mới vào kho!")
+            print(f"[BGM CONTINUITY GATE OK] Chọn {chosen_track.name} từ giây {start_off:.0f}")
 
         raw_mix = output_path.with_name(f"._raw_5beat_{output_path.stem}.wav")
 
-        filter_complex = f"""
-[0:a]asetrate=44100*{pitch_rate},aresample=44100,atempo={inv_tempo_clamped}[intro_p];
-[intro_p]asplit=2[intro_a][intro_b];
-[3:a]asetrate=44100*{orch_pitch_rate},aresample=44100,atempo={orch_tempo}[orch_dm];
-[orch_dm]asplit=3[orch_a][orch_b][orch_c];
-
-[intro_a]atrim={b1_st}:{b1_st + d1:.2f},asetpts=PTS-STARTPTS,volume=1.05,afade=t=out:st={d1 - 0.7:.2f}:d=0.7[b1];
-[orch_a]atrim={b2_st}:{b2_st + d2:.2f},asetpts=PTS-STARTPTS,volume=1.15,afade=t=in:st=0:d=0.5,afade=t=out:st={d2 - 0.7:.2f}:d=0.7,adelay={ms_b2}|{ms_b2}[b2];
-[orch_b]atrim={b3_st}:{b3_st + d3:.2f},asetpts=PTS-STARTPTS,volume=1.20,afade=t=in:st=0:d=0.6,afade=t=out:st={d3 - 0.8:.2f}:d=0.8,adelay={ms_b3}|{ms_b3}[b3];
-[orch_c]atrim={b4_st}:{b4_st + d4:.2f},asetpts=PTS-STARTPTS,volume=1.15,afade=t=in:st=0:d=0.6,afade=t=out:st={d4 - 0.8:.2f}:d=0.8,adelay={ms_b4}|{ms_b4}[b4_orch];
-[4:a]atrim=1.2:{1.2 + d4:.2f},asetpts=PTS-STARTPTS,highpass=f=90,volume=0.52,afade=t=in:st=0:d=0.6,afade=t=out:st={d4 - 0.8:.2f}:d=0.8,adelay={ms_b4}|{ms_b4}[b4_perc];
-[intro_b]atrim={b5_st}:{b5_st + d5:.2f},asetpts=PTS-STARTPTS,volume=1.12,afade=t=in:st=0:d=0.6,afade=t=out:st={max(0.5, d5 - 1.2):.2f}:d=1.2,adelay={ms_b5}|{ms_b5}[b5];
-
-[1:a]atrim=0:8.5,asetpts=PTS-STARTPTS,volume=0.42,afade=t=out:st=7.0:d=1.5[clock1];
-[1:a]atrim=0:9.5,asetpts=PTS-STARTPTS,volume=0.40,afade=t=in:st=0:d=0.5,afade=t=out:st=8.0:d=1.5,adelay={ms_b3}|{ms_b3}[clock2];
-[2:a]atrim=0:{max(5.0, duration_sec - 4.0):.2f},asetpts=PTS-STARTPTS,lowpass=f=180,volume=0.55,afade=t=in:st=1.0:d=1.0,afade=t=out:st={max(2.0, duration_sec - 5.5):.2f}:d=1.5[sub_heartbeat];
-[5:a]volume=0.65[proc_acc];
-"""
         if has_cloud_ai:
-            filter_complex += f"""
-[6:a]atrim=0:{duration_sec:.2f},asetpts=PTS-STARTPTS,lowpass=f=1800,volume=0.25[ai_layer];
-[b1][b2][b3][b4_orch][b4_perc][b5][clock1][clock2][sub_heartbeat][proc_acc][ai_layer]amix=inputs=11:normalize=0,alimiter=limit=0.95:level=disabled,atrim=0:{duration_sec:.2f}[out]
-"""
+            print(f"[BGM CONTINUITY GATE OK] Dùng bản AI cloud từ giây {cloud_start:.0f}")
+            filter_complex = (
+                f"[0:a]atrim={cloud_start:.2f}:{cloud_start + duration_sec:.2f},asetpts=PTS-STARTPTS,"
+                f"afade=t=in:st=0:d=0.3,afade=t=out:st={max(0.5, duration_sec - 1.2):.2f}:d=1.2[bgm_main];"
+                f"[1:a]atrim=0:{duration_sec:.2f},asetpts=PTS-STARTPTS,volume=0.35[acc];"
+                f"[bgm_main][acc]amix=inputs=2:normalize=0,alimiter=limit=0.95:level=disabled[out]"
+            )
+            cmd1 = [
+                "ffmpeg", "-y",
+                "-stream_loop", "-1", "-i", str(cloud_ai_wav),
+                "-i", str(proc_accent_wav),
+                "-filter_complex", filter_complex,
+                "-map", "[out]", "-ar", "48000", "-ac", "2", str(raw_mix),
+            ]
         else:
-            filter_complex += f"""
-[b1][b2][b3][b4_orch][b4_perc][b5][clock1][clock2][sub_heartbeat][proc_acc]amix=inputs=10:normalize=0,alimiter=limit=0.95:level=disabled,atrim=0:{duration_sec:.2f}[out]
-"""
+            # 1 bản nhạc chủ đạo liền mạch từ đoạn đã qua cổng kiểm tra (KHÔNG cắt nối 5 khúc rời rạc)
+            pitch_rate = round(math.pow(2.0, max(-2, min(2, dna["pitch_semitones"])) / 12.0), 6)
+            inv_tempo = max(0.85, min(1.15, round(1.0 / pitch_rate, 4)))
+            filter_complex = (
+                f"[0:a]atrim={start_off:.2f}:{start_off + duration_sec + 2.0:.2f},asetpts=PTS-STARTPTS,"
+                f"asetrate=44100*{pitch_rate},aresample=48000,atempo={inv_tempo},"
+                f"atrim=0:{duration_sec:.2f},afade=t=in:st=0:d=0.3,afade=t=out:st={max(0.5, duration_sec - 1.2):.2f}:d=1.2[bgm_main];"
+                f"[1:a]atrim=0:{duration_sec:.2f},asetpts=PTS-STARTPTS,volume=0.32[acc];"
+                f"[bgm_main][acc]amix=inputs=2:normalize=0,alimiter=limit=0.95:level=disabled[out]"
+            )
+            cmd1 = [
+                "ffmpeg", "-y",
+                "-stream_loop", "-1", "-i", str(chosen_track),
+                "-i", str(proc_accent_wav),
+                "-filter_complex", filter_complex,
+                "-map", "[out]", "-ar", "48000", "-ac", "2", str(raw_mix),
+            ]
 
-        cmd1 = [
-            "ffmpeg", "-y",
-            "-i", str(t_intro),
-            "-i", str(t_clock),
-            "-i", str(t_ind),
-            "-i", str(t_orch),
-            "-i", str(t_clim),
-            "-i", str(proc_accent_wav),
-        ]
-        if has_cloud_ai:
-            cmd1.extend(["-i", str(cloud_ai_wav)])
-
-        cmd1.extend([
-            "-filter_complex", filter_complex.strip(),
-            "-map", "[out]",
-            "-ar", "48000", "-ac", "2",
-            str(raw_mix),
-        ])
         res1 = subprocess.run(cmd1, capture_output=True, text=True, encoding="utf-8", errors="replace")
         proc_accent_wav.unlink(missing_ok=True)
         cloud_ai_wav.unlink(missing_ok=True)
+        if not has_cloud_ai and chosen_track is not None:
+            used_tracks.add(chosen_track.name)
+            ledger["used_tracks"] = list(used_tracks)[-15:]
+            self._save_ledger(ledger)
 
         if res1.returncode != 0:
             raise RuntimeError(f"Lỗi tổng hợp 5-Beat Trailer BGM: {res1.stderr[-500:]}")
@@ -439,6 +471,11 @@ class ACEStepFBRunner:
         raw_mix.unlink(missing_ok=True)
         if res2.returncode != 0:
             raise RuntimeError(f"Lỗi chuẩn hóa 5-Beat Trailer BGM: {res2.stderr[-500:]}")
+
+        final_db = self._per_second_db(output_path)
+        if self._find_continuous_offset(final_db, len(final_db), floor_db=-30.0) != 0:
+            raise RuntimeError(f"[BGM FINAL GATE FAILED] Nhạc nền thành phẩm có đoạn hụt/im lặng: {[round(x) for x in final_db]}")
+        print(f"[BGM FINAL GATE OK] Liền mạch từng giây: {[round(x) for x in final_db]}")
 
         # Lưu mã băm SHA-256 và công thức DNA vào sổ cái chống trùng lặp
         file_hash = hashlib.sha256(output_path.read_bytes()).hexdigest()

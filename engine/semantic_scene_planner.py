@@ -29,11 +29,13 @@ if sys.stdout:
 
 MUSIC_ROOT = Path(r"D:\Đầu Não (không xóa)\assets\music")
 
-# 5 BỘ DNA THẨM MỸ & ÂM NHẠC ĐỘC LẬP THEO CHỦ ĐỀ KỊCH BẢN
+# 5 BỘ DNA THẨM MỸ & ÂM NHẠC THEO CHỦ ĐỀ (KHÓA CỨNG NỀN SƯƠNG MÙ XANH #42B2F2 MỨC 1 CỦA KÊNH, CHỈ ĐỔI MÀU NHẤN CHỮ & NHẠC NỀN)
+CHANNEL_LOCKED_BACKDROP = "<HaDaWhyMistBackground intensity={0.11} accentHex=\"66, 178, 242\" />"
+
 THEME_DNA_PRESETS = {
     "finance_macro": {
         "name": "Tài Chính - Ngân Hàng - Tiền Tệ",
-        "bg_radial": "radial-gradient(circle at 50% 34%, rgba(46, 36, 14, 0.62) 0%, rgba(12, 10, 6, 0.95) 62%, #060503 100%)",
+        "bg_component": CHANNEL_LOCKED_BACKDROP,
         "primary_accent": "#FFE600",
         "danger_accent": "#FF3B47",
         "bgm_candidates": [
@@ -44,7 +46,7 @@ THEME_DNA_PRESETS = {
     },
     "tech_ai_auto": {
         "name": "Công Nghệ - AI - Bán Dẫn - Xe Điện",
-        "bg_radial": "radial-gradient(circle at 50% 34%, rgba(12, 52, 88, 0.65) 0%, rgba(6, 14, 28, 0.95) 62%, #030710 100%)",
+        "bg_component": CHANNEL_LOCKED_BACKDROP,
         "primary_accent": "#00E5FF",
         "danger_accent": "#FF3B47",
         "bgm_candidates": [
@@ -54,7 +56,7 @@ THEME_DNA_PRESETS = {
     },
     "forensic_crime": {
         "name": "Điều Tra - Đại Án - Kiện Tụng - Sụp Đổ",
-        "bg_radial": "radial-gradient(circle at 50% 34%, rgba(64, 16, 24, 0.58) 0%, rgba(14, 6, 10, 0.95) 62%, #070305 100%)",
+        "bg_component": CHANNEL_LOCKED_BACKDROP,
         "primary_accent": "#FF3B47",
         "danger_accent": "#FFE600",
         "bgm_candidates": [
@@ -65,7 +67,7 @@ THEME_DNA_PRESETS = {
     },
     "business_consumer": {
         "name": "Thương Hiệu - F&B - Bán Lẻ - Bất Động Sản",
-        "bg_radial": "radial-gradient(circle at 50% 34%, rgba(16, 56, 48, 0.58) 0%, rgba(8, 18, 16, 0.95) 62%, #040A09 100%)",
+        "bg_component": CHANNEL_LOCKED_BACKDROP,
         "primary_accent": "#00F59B",
         "danger_accent": "#FFE600",
         "bgm_candidates": [
@@ -75,7 +77,7 @@ THEME_DNA_PRESETS = {
     },
     "geopolitics_energy": {
         "name": "Địa Chính Trị - Năng Lượng - Chuỗi Cung Ứng Toàn Cầu",
-        "bg_radial": "radial-gradient(circle at 50% 34%, rgba(52, 38, 22, 0.60) 0%, rgba(14, 12, 10, 0.95) 62%, #060605 100%)",
+        "bg_component": CHANNEL_LOCKED_BACKDROP,
         "primary_accent": "#FFB800",
         "danger_accent": "#FF3B47",
         "bgm_candidates": [
@@ -110,6 +112,15 @@ def recommend_archetype_for_sentence(sentence: str) -> dict:
     và loại SFX phù hợp, tuyệt đối cấm lắp râu ông nọ chắp cằm bà kia!
     """
     low = sentence.lower()
+
+    # 0. LUẬT SUSPENSE REVEAL: Nếu câu hỏi đặt vấn đề / gây tò mò -> Bắt buộc giữ bí mật bằng dấu ? trước, trả lời mới bung đáp án!
+    question_keywords = ["?", "bằng gì", "tại sao", "vì sao", "bí mật nào", "nhờ đâu", "sống bằng", "ai đứng sau", "cách nào"]
+    if any(kw in low for kw in question_keywords):
+        return {
+            "archetype": "SuspenseQuestionReveal3D",
+            "reason": "Câu hỏi kích thích tò mò: Bắt buộc hiện bối cảnh + bóng người/dấu ? lúc hỏi; chỉ bung vật thể đáp án 3D đúng frame đọc câu trả lời!",
+            "recommended_sfx": ["whoosh_big.mp3", "pop_dry.mp3", "zoom_hit.mp3"],
+        }
 
     # 1. Kiểm tra xem câu có thực sự nói về di chuyển địa lý / quốc gia không
     geo_keywords = ["sang tận", "từ việt nam", "quốc gia", "bản đồ", "biên giới", "hải trình", "đường bay", "xuất khẩu sang", "toàn cầu", "châu âu", "mỹ", "trung quốc", "luân đôn", "london", "singapore"]

@@ -116,29 +116,79 @@ def search_wikimedia_images(query: str, max_urls: int = 5) -> list[str]:
     return urls
 
 
-def download_valid_image(urls: list[str], out_raw_path: Path, min_width: int = 500) -> Path | None:
-    """Tải và kiểm tra nghiêm ngặt độ phân giải ảnh thật bằng PIL."""
-    for u in urls:
+def measure_sharpness_score(pil_img: Image.Image) -> float:
+    """Đo độ nét thực tế (Laplacian variance trên bản chuẩn 512px) để chặn 100% ảnh mờ nhòe / vỡ hạt."""
+    rgb = pil_img.convert("RGB")
+    w, h = rgb.size
+    if min(w, h) <= 0:
+        return 0.0
+    scale = 512.0 / min(w, h)
+    if scale < 1.0:
+        rgb = rgb.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
+    try:
+        import cv2
+        import numpy as np
+        gray = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2GRAY)
+        return float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    except Exception:
+        from PIL import ImageFilter, ImageStat
+        edges = rgb.convert("L").filter(ImageFilter.FIND_EDGES)
+        return float(ImageStat.Stat(edges).var[0])
+
+
+def download_valid_image(
+    urls: list[str],
+    out_raw_path: Path,
+    min_width: int = 800,
+    min_height: int = 500,
+    min_sharpness: float = 45.0,
+) -> Path | None:
+    """Tải và kiểm tra nghiêm ngặt độ phân giải (>=800x500) + độ nét Laplacian để chặn ảnh mờ nhòe."""
+    best_candidate: tuple[float, Image.Image, str] | None = None
+    fallback_candidate: tuple[float, Image.Image, str] | None = None
+
+    for u in urls[:12]:
         try:
             hdrs = WIKI_HEADERS if "wikimedia.org" in u else HEADERS
             req = urllib.request.Request(u, headers=hdrs)
             with urllib.request.urlopen(req, timeout=12) as resp:
                 raw_bytes = resp.read()
+            if len(raw_bytes) < 25000:
+                continue
             img = Image.open(io.BytesIO(raw_bytes))
             w, h = img.size
-            if w < min_width or h < 350:
+            if w < 620 or h < 420:
                 continue
-            img = img.convert("RGBA")
-            if max(w, h) > 1400:
-                scale = 1400.0 / max(w, h)
-                img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
-            out_raw_path.parent.mkdir(parents=True, exist_ok=True)
-            img.save(out_raw_path, format="PNG")
-            print(f"[HARVESTER OK] Đã tải ảnh thật '{out_raw_path.name}' ({img.size[0]}x{img.size[1]}) từ: {u[:85]}")
-            return out_raw_path
+            sharp = measure_sharpness_score(img)
+            if sharp < min_sharpness:
+                print(f"[HARVESTER SKIP BLUR] {w}x{h} sharpness={sharp:.1f} < {min_sharpness}: {u[:75]}")
+                continue
+
+            score = sharp + min(w, 1600) * 0.05
+            rgba = img.convert("RGBA")
+            if w >= min_width and h >= min_height:
+                if best_candidate is None or score > best_candidate[0]:
+                    best_candidate = (score, rgba, u)
+                if w >= 1000 and sharp >= 80.0:
+                    break
+            else:
+                if fallback_candidate is None or score > fallback_candidate[0]:
+                    fallback_candidate = (score, rgba, u)
         except Exception:
             continue
-    return None
+
+    chosen = best_candidate or fallback_candidate
+    if chosen is None:
+        return None
+    score, img, chosen_url = chosen
+    w, h = img.size
+    if max(w, h) > 1600:
+        scale = 1600.0 / max(w, h)
+        img = img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
+    out_raw_path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out_raw_path, format="PNG")
+    print(f"[HARVESTER OK] Đã tải ảnh thật '{out_raw_path.name}' ({img.size[0]}x{img.size[1]}, score={score:.1f}) từ: {chosen_url[:85]}")
+    return out_raw_path
 
 
 def remove_background_bria(input_png: Path, output_cutout_png: Path) -> Path:
@@ -223,7 +273,7 @@ def harvest_bespoke_3d_object(
     tmp_raw = out_dir / f"_{object_id}_raw_tmp.png"
     tmp_cut = out_dir / f"_{object_id}_cut_tmp.png"
 
-    downloaded = download_valid_image(urls, tmp_raw, min_width=400)
+    downloaded = download_valid_image(urls, tmp_raw, min_width=650, min_height=450)
     if not downloaded:
         raise RuntimeError(f"Không tìm thấy mẫu vật thể 3D cho: {object_query_en}")
 

@@ -42,12 +42,12 @@ export const ScaleComparison3D: React.FC<ScaleComparison3DProps> = ({
   const localFrame = frame - startFrame;
 
   const towerGrow = spring({
-    frame: Math.max(0, localFrame - 95),
+    frame: Math.max(0, localFrame - 20),
     fps,
     config: { damping: 14, stiffness: 85, mass: 1.0 },
   });
 
-  const counterProgress = interpolate(localFrame, [95, 210], [0, 1], {
+  const counterProgress = interpolate(localFrame, [20, 150], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -55,11 +55,11 @@ export const ScaleComparison3D: React.FC<ScaleComparison3DProps> = ({
     interpolate(counterProgress, [0, 1], [rightStartNumber, rightTargetNumber])
   );
 
-  const baselineY = 1430;
-  const maxTowerHeight = 680;
+  const baselineY = 1380;
+  const maxTowerHeight = 580;
   const currentTowerHeight = Math.max(20, maxTowerHeight * towerGrow);
 
-  const stampFrame = 270;
+  const stampFrame = 180;
   const showStamp = Boolean(stampText) && localFrame >= stampFrame;
   const stampPop = spring({
     frame: Math.max(0, localFrame - stampFrame),
@@ -239,7 +239,7 @@ export const ScaleComparison3D: React.FC<ScaleComparison3DProps> = ({
             <div
               style={{
                 fontFamily: "BeVietnamProBlack, sans-serif",
-                fontSize: 44,
+                fontSize: 38,
                 color: "#FFE600",
                 WebkitTextStroke: "9px #05070C",
                 paintOrder: "stroke fill",
@@ -256,24 +256,23 @@ export const ScaleComparison3D: React.FC<ScaleComparison3DProps> = ({
         <div
           style={{
             position: "absolute",
-            left: 540,
-            top: 1715,
-            transform: `translate(-50%, -50%) scale(${stampScale}) rotate(-2deg)`,
-            padding: "16px 42px",
-            borderRadius: 18,
-            border: "5px solid #FFE600",
-            background: "rgba(10, 14, 24, 0.88)",
-            boxShadow:
-              "0 20px 50px rgba(0,0,0,0.95), 0 0 40px rgba(255, 230, 0, 0.55)",
+            left: 265,
+            top: 900,
+            transform: `translate(-50%, -50%) scale(${stampScale}) rotate(-10deg)`,
+            padding: "10px 30px",
+            border: "7px solid #FF3B47",
+            borderRadius: 12,
+            background: "transparent",
+            boxShadow: "0 0 28px rgba(255, 59, 71, 0.55)",
             whiteSpace: "nowrap",
           }}
         >
           <div
             style={{
               fontFamily: "BeVietnamProBlack, sans-serif",
-              fontSize: 44,
-              color: "#FFE600",
-              letterSpacing: "0.03em",
+              fontSize: 42,
+              color: "#FF3B47",
+              letterSpacing: "0.04em",
               WebkitTextStroke: "6px #05070C",
               paintOrder: "stroke fill",
             }}

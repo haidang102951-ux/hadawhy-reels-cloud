@@ -1,8 +1,30 @@
 {
   "used_hashes": [
-    "71e869b39663f2d5e701754d33dbddb5ada382f926427693c479128e7e2686a7"
+    "71e869b39663f2d5e701754d33dbddb5ada382f926427693c479128e7e2686a7",
+    "df537ce22c072288b67c0d90e473a9c68e6bea84231d7e13a6294ab6077f64f6",
+    "18d3278e1f89917562b61312da7540a7fe8c070ddaba3740e06ad675e95e8c05",
+    "d5f7c85c5789cc1e00960687ddc06ea5b287bcc8d00bb6430c8d6f67382e09a3",
+    "79ba2cffaaed89241e26e126105db6815453b349df62d1669e629464716dffc3",
+    "cd78e9320b200b15b908464465d24a8bb7c9b88c4a75f94de257dd8a42e18734",
+    "5282cbd2da75e0ec06fe525a2ed476d9e059deaece22101aeb3e1a8a07b6ca90",
+    "5da98b8507364f0ba81be96c645644fb75e6d4fbb1cffcdf6fcbed81d9c9c384",
+    "61052f8374c96ea289028acfe203687f8b646a13e795f58d8e4a740e6b5e4ed7"
   ],
   "used_recipes": [
-    "forensic_finance_st-2_tm1.156_s0.0_18.0_53.2_42.0_14.0"
+    "forensic_finance_st-2_tm1.156_s0.0_18.0_53.2_42.0_14.0",
+    "geopolitics_war_st0_tm1.156_s0.4_25.2_46.0_37.2_14.5",
+    "conspiracy_thriller_st0_tm1.228_s0.0_20.4_53.2_42.8_13.0",
+    "forensic_finance_st-3_tm1.132_s0.0_24.4_47.8_41.2_13.0",
+    "forensic_finance_st-1_tm1.204_s0.4_21.2_48.7_42.0_12.5",
+    "conspiracy_thriller_st2_tm1.216_s0.0_27.6_52.3_38.0_13.0",
+    "tech_monopoly_st-2_tm1.24_s0.0_23.6_58.6_34.0_13.5",
+    "conspiracy_thriller_st0_tm1.156_s0.8_20.4_51.4_42.8_14.0",
+    "conspiracy_thriller_st-3_tm1.24_s0.8_21.2_46.9_42.8_12.5"
+  ],
+  "used_tracks": [
+    "epic_victory_climax_01.mp3",
+    "epic_victory_climax_02.mp3",
+    "dark_investigation_tension_01.mp3",
+    "dark_investigation_mystery_02.mp3"
   ]
 }

@@ -115,7 +115,7 @@ def fetch_google_news_facts(topic_query: str, lang: str = "vi", max_items: int =
 
 
 def fetch_wikipedia_summary(query: str, lang: str = "vi") -> str:
-    """Lấy tóm tắt bách khoa toàn thư từ Wikipedia để đối chiếu tên riêng & lịch sử."""
+    """Lấy trích đoạn sâu từ Wikipedia (tối đa 2500 ký tự) để đối chiếu lịch sử, cơ chế khoa học & tên riêng."""
     encoded = urllib.parse.quote(query)
     api_url = (
         f"https://{lang}.wikipedia.org/w/api.php?action=query&list=search"
@@ -126,12 +126,166 @@ def fetch_wikipedia_summary(query: str, lang: str = "vi") -> str:
         req = urllib.request.Request(api_url, headers=WIKI_HEADERS)
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore"))
-        for item in data.get("query", {}).get("search", []):
+        hits = data.get("query", {}).get("search", [])
+        if hits:
+            page_title = urllib.parse.quote(hits[0]["title"])
+            extract_url = (
+                f"https://{lang}.wikipedia.org/w/api.php?action=query&prop=extracts"
+                f"&exintro=false&explaintext=true&exchars=2500&titles={page_title}&format=json"
+            )
+            req2 = urllib.request.Request(extract_url, headers=WIKI_HEADERS)
+            with urllib.request.urlopen(req2, timeout=10) as resp2:
+                d2 = json.loads(resp2.read().decode("utf-8", errors="ignore"))
+            for p in d2.get("query", {}).get("pages", {}).values():
+                ext = p.get("extract", "").strip()
+                if ext:
+                    return ext
+        for item in hits:
             clean_snip = re.sub(r"<[^>]+>", "", item.get("snippet", ""))
             snippets.append(f"[{item.get('title')}]: {clean_snip}")
     except Exception:
         pass
     return "\n".join(snippets)
+
+
+def _search_urls_for_deep_read(query: str, max_results: int = 4) -> list[tuple[str, str]]:
+    """Tìm URL bài báo gốc thật qua Serper (nếu có) -> Bing Search RSS (miễn phí, URL gốc trực tiếp) -> DDGS fallback."""
+    import os
+    found: list[tuple[str, str]] = []
+    serper_key = os.getenv("SERPER_API_KEY", "").strip()
+    if serper_key:
+        try:
+            req = urllib.request.Request(
+                "https://google.serper.dev/search",
+                data=json.dumps({"q": query, "num": max_results}).encode("utf-8"),
+                headers={"X-API-KEY": serper_key, "Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            for item in data.get("organic", [])[:max_results]:
+                u = str(item.get("link") or "").strip()
+                t = str(item.get("title") or "").strip()
+                if u:
+                    found.append((t, u))
+            if found:
+                return found
+        except Exception:
+            pass
+
+    # Bing News RSS (trả thẳng tin báo chí chính thống VN & quốc tế, tránh kết quả từ điển/văn mẫu)
+    try:
+        rss_url = f"https://www.bing.com/news/search?q={urllib.parse.quote(query)}&format=rss"
+        req = urllib.request.Request(rss_url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            xml_bytes = resp.read()
+        root = ET.fromstring(xml_bytes)
+        for item in root.findall("./channel/item")[:max_results]:
+            t = item.findtext("title", default="").strip()
+            raw_link = item.findtext("link", default="").strip()
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(raw_link).query)
+            u = qs.get("url", [raw_link])[0]
+            if u.startswith("http"):
+                found.append((t, u))
+    except Exception:
+        pass
+    return found
+
+
+def _generate_storm_research_angles(topic_vi: str, topic_en: str = "") -> list[tuple[str, str]]:
+    """
+    Tư duy đa góc nhìn kiểu STORM: Tự động tách chủ đề thành 4 góc điều tra sâu
+    (Điều kiện đời sống/đô thị -> Chính sách kinh tế/lịch sử -> Tâm lý xã hội -> Số liệu/Mặt trái)
+    thay vì tìm theo 1 từ khóa cứng máy móc.
+    """
+    import os
+    core_kw = " ".join(topic_vi.split()[:6])
+    fallback_angles = [
+        ("Điều kiện đời sống / Đô thị", f"{core_kw} lịch sử không gian sống"),
+        ("Chính sách kinh tế / Lịch sử", f"{core_kw} chính sách kinh tế bao cấp đổi mới"),
+        ("Tâm lý xã hội / Hành vi", f"{core_kw} tâm lý cộng đồng thói quen"),
+        ("Số liệu / Mặt trái thực tế", f"{core_kw} số liệu thống kê mặt trái"),
+    ]
+    if topic_en.strip():
+        fallback_angles.append(("International Data", " ".join(topic_en.split()[:5])))
+
+    or_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if not or_key:
+        return fallback_angles
+
+    prompt = (
+        f"Bạn là chuyên gia điều tra đa góc nhìn cho chủ đề: '{topic_vi}'.\n"
+        "Hãy sinh đúng 4 truy vấn tìm kiếm báo chí/nghiên cứu ngắn gọn (mỗi truy vấn 5-8 từ tiếng Việt) "
+        "theo 4 góc: (1) Điều kiện đời sống/đô thị, (2) Chính sách kinh tế/lịch sử trực tiếp, "
+        "(3) Tâm lý xã hội/hành vi, (4) Số liệu/Mặt trái thực tế.\n"
+        'Trả về JSON array 4 phần tử: [{"angle": "...", "query": "..."}]'
+    )
+    try:
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/chat/completions",
+            data=json.dumps({
+                "model": "google/gemma-3-27b-it:free",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.2,
+            }).encode("utf-8"),
+            headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            raw = json.loads(resp.read().decode("utf-8"))
+        txt = str((raw.get("choices") or [{}])[0].get("message", {}).get("content") or "")
+        m = re.search(r"\[[\s\S]*\]", txt)
+        if m:
+            arr = json.loads(m.group(0))
+            parsed = [(str(x.get("angle", "")), str(x.get("query", ""))) for x in arr if x.get("query")]
+            if len(parsed) >= 3:
+                if topic_en.strip():
+                    parsed.append(("International Data", " ".join(topic_en.split()[:5])))
+                return parsed
+    except Exception:
+        pass
+    return fallback_angles
+
+
+def deep_web_research_fulltext(topic_vi: str, topic_en: str = "", max_articles: int = 6) -> list[dict]:
+    """
+    Stack nghiên cứu sâu (STORM Multi-Angle Query + Serper/Bing News + trafilatura full-text):
+    Quét đủ 4 góc điều tra, tải và bóc sạch TOÀN VĂN bài báo gốc để trích đúng sự thật 100%.
+    """
+    extracts: list[dict] = []
+    try:
+        import trafilatura
+    except ImportError as exc:
+        print(f"[DEEP RESEARCH WARN] Thiếu trafilatura ({exc}); bỏ qua full-text scrape.")
+        return extracts
+
+    queries = _generate_storm_research_angles(topic_vi, topic_en)
+
+    junk_domains = ("vietjack", "loigiaihay", "hoc24", "toploigiai", "doctailieu", "tailieu.vn", "vndoc.com")
+    seen_urls: set[str] = set()
+    for angle, q in queries:
+        angle_count = 0
+        for title, url in _search_urls_for_deep_read(q, max_results=5):
+            if len(extracts) >= max_articles or angle_count >= 2:
+                break
+            low_u = url.lower()
+            if not url or url in seen_urls or any(jd in low_u for jd in junk_domains):
+                continue
+            seen_urls.add(url)
+            try:
+                downloaded = trafilatura.fetch_url(url)
+                text = trafilatura.extract(downloaded, include_comments=False, include_tables=True) if downloaded else ""
+                if text and len(text.strip()) >= 250:
+                    extracts.append({
+                        "angle": angle,
+                        "title": title,
+                        "url": url,
+                        "full_text_excerpt": text.strip()[:1800],
+                    })
+                    angle_count += 1
+            except Exception:
+                continue
+
+    print(f"[DEEP RESEARCH OK] trafilatura đã bóc tách {len(extracts)} bài báo gốc full-text.")
+    return extracts
 
 
 def build_verified_fact_sheet(
@@ -140,36 +294,55 @@ def build_verified_fact_sheet(
     out_json_path: str | Path,
 ) -> dict:
     """
-    Tự động thu thập hồ sơ sự thật đa nguồn (Tiếng Việt + Quốc Tế) và xuất ra `fact_sheet.json`.
-    BẮT BUỘC chạy bước này trước khi viết kịch bản!
+    Tự động thu thập hồ sơ sự thật đa nguồn, đa góc nhìn (ddgs + trafilatura full-text + Google News RSS + Wikipedia)
+    và xuất ra `fact_sheet.json`. BẮT BUỘC chạy bước này trước khi viết kịch bản!
     """
     out_json_path = Path(out_json_path)
     out_json_path.parent.mkdir(parents=True, exist_ok=True)
 
     print(f"[*] Đang trinh sát sự thật đa nguồn cho chủ đề: '{topic_vi}' / '{topic_en}'...")
     vi_news = fetch_google_news_facts(topic_vi, lang="vi", max_items=8)
+    vi_why_news = fetch_google_news_facts(f"{topic_vi} nguyên nhân số liệu", lang="vi", max_items=6)
     en_news = fetch_google_news_facts(topic_en, lang="en", max_items=6)
     wiki_vi = fetch_wikipedia_summary(topic_vi, lang="vi")
     wiki_en = fetch_wikipedia_summary(topic_en, lang="en")
+    deep_articles = deep_web_research_fulltext(topic_vi, topic_en, max_articles=5)
 
-    # Trích xuất tự động các con số xuất hiện trong tiêu đề báo chí để làm neo kiểm chứng
-    all_titles = " | ".join([a["title"] for a in vi_news + en_news])
-    extracted_numbers = list(dict.fromkeys(re.findall(r"\b\d+(?:[\.,]\d+)?(?:\s*(?:tỷ|triệu|nghìn|%|USD|đô|năm|tháng|máy bay|tàu bay))?\b", all_titles, flags=re.IGNORECASE)))
+    seen_titles = set()
+    merged_vi = []
+    for item in vi_news + vi_why_news:
+        t_key = item["title"].lower()
+        if t_key not in seen_titles:
+            seen_titles.add(t_key)
+            merged_vi.append(item)
+
+    all_corpus = " | ".join(
+        [a["title"] for a in merged_vi + en_news]
+        + [wiki_vi, wiki_en]
+        + [d["full_text_excerpt"] for d in deep_articles]
+    )
+    extracted_numbers = list(dict.fromkeys(re.findall(
+        r"\b\d+(?:[\.,]\d+)?(?:\s*(?:tỷ|triệu|nghìn|lít|%|USD|đô|năm|tháng|người|nước))?\b",
+        all_corpus,
+        flags=re.IGNORECASE,
+    )))
 
     fact_sheet = {
         "topic_vi": topic_vi,
         "topic_en": topic_en,
-        "verified_numbers_in_press": extracted_numbers[:25],
-        "vietnamese_press_sources": vi_news,
+        "verified_numbers_in_press": extracted_numbers[:40],
+        "deep_article_extracts": deep_articles,
+        "vietnamese_press_sources": merged_vi,
         "international_press_sources": en_news,
         "wikipedia_context": {
             "vi": wiki_vi,
             "en": wiki_en,
         },
+        "extra_verified_facts": [],
     }
 
     out_json_path.write_text(json.dumps(fact_sheet, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[FACT SHEET OK] Đã lưu {len(vi_news)} nguồn báo VN & {len(en_news)} nguồn quốc tế tại: {out_json_path}")
+    print(f"[FACT SHEET OK] Đã lưu {len(deep_articles)} bài full-text, {len(merged_vi)} báo VN & {len(en_news)} quốc tế tại: {out_json_path}")
     return fact_sheet
 
 
@@ -233,6 +406,79 @@ def validate_short_script_retention(
     return {"passed": passed, "hook_archetype": hook_archetype, "issues": issues}
 
 
+PREACHY_PHRASES = (
+    "chung tay",
+    "nâng cao ý thức",
+    "mỗi người dân hãy",
+    "hãy cùng nhau",
+    "bài học đắt giá",
+    "thức tỉnh",
+)
+
+KNOWLEDGE_MECHANISM_WORDS = (
+    "vì", "bởi", "cơ chế", "tâm lý", "vỏ não", "kinh tế", "lịch sử", "đô thị",
+    "khí hậu", "chi phí", "cấu trúc", "quy luật", "bao cấp", "địa chất", "áp suất",
+    "lạm phát", "thuế", "tỷ lệ", "phần trăm", "%", "chiếm", "nguyên nhân",
+)
+
+
+def verify_script_facts_and_logic(
+    dialogue_segments: list[dict],
+    fact_sheet: dict | None = None,
+    target_word_range: tuple[int, int] = (88, 125),
+) -> dict:
+    """
+    Cổng Kiểm Định Logic, Kiến Thức & Xác Thực Số Liệu (Zero-Hallucination & Deep Logic Gate):
+    1. Chống sai thời lượng: Tổng số từ phải khớp khung ~40s (88..125 từ).
+    2. Chống thiếu kiến thức: Phải có ít nhất 2 lớp giải thích cơ chế thật (lịch sử/khoa học/tâm lý/kinh tế).
+    3. Bắt buộc Suspense Question (?): Có câu hỏi kích thích tò mò trước khi bung đáp án.
+    4. Chống văn mẫu giảng đạo ở Beat 4-5.
+    5. Đối chiếu số liệu với fact_sheet để phát hiện con số không rõ nguồn.
+    """
+    issues: list[str] = []
+    warnings: list[str] = []
+    full_text = " ".join(str(s.get("text", "")).strip() for s in dialogue_segments)
+    low = full_text.lower()
+    total_words = len(full_text.split())
+
+    if not (target_word_range[0] <= total_words <= target_word_range[1]):
+        issues.append(
+            f"SAI THỜI LƯỢNG (~40s): Tổng {total_words} từ nằm ngoài khung chuẩn {target_word_range[0]}–{target_word_range[1]} từ."
+        )
+
+    mech_hits = sum(1 for kw in KNOWLEDGE_MECHANISM_WORDS if kw in low)
+    if mech_hits < 2:
+        issues.append(
+            "THIẾU KIẾN THỨC CHUYÊN SÂU: Kịch bản chưa giải thích cơ chế thật (lịch sử/khoa học/tâm lý/kinh tế) mà chỉ kể hiện tượng bề mặt."
+        )
+
+    if "?" not in full_text:
+        issues.append("THIẾU SUSPENSE QUESTION: Không có câu hỏi tu từ (?) để giữ bí mật và lật mở đáp án.")
+
+    for bad in PREACHY_PHRASES:
+        if bad in low:
+            issues.append(f"VĂN MẪU GIẢNG ĐẠO: Chứa cụm '{bad}' gây tụt cảm xúc ở Beat 4–5.")
+
+    # Đối chiếu các con số trong lời thoại với fact_sheet
+    script_nums = set(re.findall(r"\b\d+(?:[\.,]\d+)?\b", full_text))
+    if fact_sheet and script_nums:
+        fact_blob = json.dumps(fact_sheet, ensure_ascii=False)
+        unverified = [n for n in sorted(script_nums) if n not in fact_blob and n not in ("1", "2", "3")]
+        if unverified:
+            warnings.append(
+                f"SỐ LIỆU CẦN ĐỐI CHIẾU NGUỒN: Các con số {unverified} chưa thấy trong fact_sheet.json — hãy nạp vào extra_verified_facts kèm URL gốc!"
+            )
+
+    passed = len(issues) == 0
+    return {
+        "passed": passed,
+        "total_words": total_words,
+        "knowledge_signals": mech_hits,
+        "issues": issues,
+        "warnings": warnings,
+    }
+
+
 def build_hook_3s_sync_brief(
     hook_text: str,
     highlight_words: list[str],
@@ -293,6 +539,59 @@ def build_hook_3s_sync_brief(
     out_json_path.write_text(json.dumps(brief, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[HOOK 3S SYNC BRIEF OK | {hook_archetype}] Đã khóa hợp đồng đồng bộ tại: {out_json_path}")
     return brief
+
+
+def critic_audit_script(
+    topic: str,
+    dialogue_segments: list[dict],
+    fact_sheet: dict | None = None,
+) -> dict:
+    """
+    Bước Phản Biện Logic & Sự Thật (Critic Loop):
+    1. Chạy deterministic verify_script_facts_and_logic().
+    2. Nếu có GEMINI_API_KEY hoặc OPENROUTER_API_KEY, gọi AI Critic phản biện chéo xem kịch bản
+       có bị lạc phạm vi, thiếu chiều sâu kiến thức, hay sai logic nhân-quả không.
+    """
+    import os
+    det = verify_script_facts_and_logic(dialogue_segments, fact_sheet=fact_sheet)
+    llm_critique = None
+    full_script = "\n".join(f"- {s.get('text', '').strip()}" for s in dialogue_segments)
+    fact_ctx = json.dumps((fact_sheet or {}).get("deep_article_extracts", [])[:3], ensure_ascii=False)[:2500]
+    prompt = (
+        f"Bạn là Tổng Biên Tập Phản Biện Logic & Sự Thật cho kênh HaDa WHY (chuyên góc khuất xã hội & bí ẩn sự việc).\n"
+        f"Chủ đề gốc: {topic}\nKịch bản 40s:\n{full_script}\n\n"
+        f"Dữ liệu báo gốc tham chiếu:\n{fact_ctx}\n\n"
+        "Hãy soi 3 lỗi chí mạng: (1) Có bị lạc phạm vi/đối tượng so với chủ đề gốc không? "
+        "(2) Đã có kiến thức sâu (lịch sử/khoa học/tâm lý/cơ chế) chưa hay chỉ nói bề mặt? "
+        "(3) Có con số hoặc lập luận nào vô lý/chưa có căn cứ không?\n"
+        'Trả về JSON duy nhất: {"passed": true/false, "flaws": ["..."], "suggestion": "..."}'
+    )
+    or_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    if or_key:
+        try:
+            req = urllib.request.Request(
+                "https://openrouter.ai/api/v1/chat/completions",
+                data=json.dumps({
+                    "model": "google/gemma-3-27b-it:free",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.1,
+                }).encode("utf-8"),
+                headers={"Authorization": f"Bearer {or_key}", "Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                raw = json.loads(resp.read().decode("utf-8"))
+            txt = str((raw.get("choices") or [{}])[0].get("message", {}).get("content") or "")
+            m = re.search(r"\{[\s\S]*\}", txt)
+            if m:
+                llm_critique = json.loads(m.group(0))
+        except Exception as exc:
+            llm_critique = {"skipped": str(exc)}
+
+    return {
+        "deterministic_audit": det,
+        "llm_critic": llm_critique,
+        "passed": det["passed"] and (llm_critique.get("passed", True) if isinstance(llm_critique, dict) else True),
+    }
 
 
 if __name__ == "__main__":

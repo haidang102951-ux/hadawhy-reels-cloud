@@ -31,31 +31,48 @@ def inspect_composition(tsx_path: Path, project_dir: Path) -> dict:
 
     code = tsx_path.read_text(encoding="utf-8")
 
-    # 1. @font-face check
-    if "@font-face" not in code or "BeVietnamPro" not in code:
-        issues.append("MISSING @font-face BeVietnamPro in composition .tsx (causes ugly system font fallback).")
+    # 1. @font-face & KineticHook check
+    if ("@font-face" not in code and "HaDaWhyFontFaces" not in code) or ("BeVietnamPro" not in code and "HaDaWhyFontFaces" not in code):
+        issues.append("MISSING @font-face / HaDaWhyFontFaces in composition .tsx (causes ugly system font fallback).")
 
-    # 2. Zero-Box check: detect dark card boxes wrapping text
+    if "KineticHookHeader" not in code and "hookSpring" not in code:
+        issues.append("MISSING KINETIC TEXT HOOK: Must use <KineticHookHeader /> or dynamic spring slam (1.38 -> 1.0) on hooks.")
+
+    # 1b. Plastic cartoon emoji ban
+    if re.search(r'objects/[a-z0-9_]+_3d\.png', code, re.IGNORECASE):
+        issues.append("BANNED PLASTIC EMOJI: Found *_3d.png cartoon icon reference. Use real harvested photos or 3D components.")
+
+    # 2. Zero-Box check: detect ANY dark card boxes wrapping text (background or backgroundColor rgba)
     box_pattern = re.compile(
-        r"backgroundColor\s*:\s*[\"']rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0\.[789]\d*\s*\)[\"']",
+        r"(?:backgroundColor|background)\s*:\s*[\"']rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0\.[456789]\d*\s*\)[\"']",
         re.IGNORECASE,
     )
     box_matches = box_pattern.findall(code)
     if box_matches:
         issues.append(
-            f"ZERO-BOX VIOLATION: Found {len(box_matches)} opaque dark backgroundColor box(es) ({box_matches[0]}). "
-            "Use floating typography with textShadow + thin underline/transparent ink stamp instead."
+            f"ZERO-BOX VIOLATION: Found {len(box_matches)} dark background/backgroundColor box(es) ({box_matches[0]}). "
+            "Use pure spatial floating typography with WebkitTextStroke + textShadow."
         )
 
-    # 3. words.json & audio check
+    # 3. words.json & dead-air silence check
     words_file = project_dir / "words.json"
     if not words_file.exists():
         issues.append(f"Missing words.json at {words_file}; timings cannot be verified against voiceover.")
     else:
         words_data = json.loads(words_file.read_text(encoding="utf-8"))
-        dur = float(words_data.get("audio_duration_sec", 0))
+        words_list = words_data.get("words", words_data) if isinstance(words_data, dict) else words_data
+        dur = float(words_data.get("audio_duration_sec", 0)) if isinstance(words_data, dict) else (words_list[-1]["end"] if words_list else 0)
         if dur <= 0:
             issues.append("words.json has invalid audio_duration_sec <= 0.")
+        # Check for unnatural dead-air gaps > 1.4s between spoken words
+        for i in range(len(words_list) - 1):
+            gap = float(words_list[i + 1].get("start", 0)) - float(words_list[i].get("end", 0))
+            if gap > 1.4:
+                issues.append(
+                    f"DEAD AIR IN VOICEOVER: {gap:.2f}s silence between '{words_list[i].get('word')}' and '{words_list[i+1].get('word')}'. "
+                    "Voiceover must flow naturally with <= 0.8s gaps."
+                )
+                break
 
     # 4. Geographic map check if script mentions countries/global spread
     scenes_file = project_dir / "script_scenes.json"
@@ -69,11 +86,74 @@ def inspect_composition(tsx_path: Path, project_dir: Path) -> dict:
                     f"MISSING GEO MAP: Script mentions {mentioned[:5]}, but composition has no SVG/GeoJSON map visual."
                 )
 
-    # 5. Watermark & KineticWordCaption check
+    # 5. Watermark, NO-Karaoke-Captions & Channel DNA Level-1 Blue Mist (#42B2F2) Lock
     if "<ChannelWatermark9x16" not in code:
         issues.append("Missing <ChannelWatermark9x16 /> 2-layer copyright watermark.")
-    if "<KineticWordCaption" not in code:
-        issues.append("Missing <KineticWordCaption />.")
+    if "<KineticWordCaption" in code:
+        issues.append(
+            "DEPRECATED KARAOKE CAPTION: Found <KineticWordCaption in composition. "
+            "Bottom running subtitles are banned; dedicate Y:520..1580 to 3D visual illustrations."
+        )
+    if "<HaDaWhyMistBackground" not in code:
+        issues.append(
+            "MISSING CHANNEL DNA BACKDROP: Must use <HaDaWhyMistBackground intensity={0.11} accentHex=\"66, 178, 242\" />."
+        )
+    elif 'accentHex="255' in code or "Forensic Grid" in code or "Tech Circuit Grid" in code or 'id="grid"' in code:
+        issues.append(
+            "WRONG BACKDROP DNA: Found square grid or non-brand yellow/red mist color. "
+            "Channel DNA Level-1 requires pure #42B2F2 (66, 178, 242) mist with NO square grid."
+        )
+
+    # 6. Strict HD Resolution & Laplacian Sharpness Gate for referenced harvested/objects images
+    public_dir = tsx_path.parent.parent / "public"
+    img_refs = re.findall(r'staticFile\(\s*["\']((?:harvested|objects)/[^"\']+\.(?:png|jpg|jpeg|webp))["\']\s*\)', code)
+    if img_refs and public_dir.exists():
+        try:
+            from PIL import Image
+            import cv2
+            import numpy as np
+            for rel_ref in sorted(set(img_refs)):
+                img_path = public_dir / rel_ref
+                if not img_path.exists():
+                    issues.append(f"MISSING ASSET: {rel_ref} not found in {public_dir}")
+                    continue
+                with Image.open(img_path) as im:
+                    w, h = im.size
+                    if rel_ref.startswith("harvested/"):
+                        if im.mode == "RGBA":
+                            if max(w, h) < 900 or min(w, h) < 600:
+                                issues.append(f"LOW-RES CUTOUT: {rel_ref} is {w}x{h} (HD cutout requires >= 900px long side & >= 600px short side).")
+                                continue
+                        elif min(w, h) < 900:
+                            issues.append(f"LOW-RES PHOTO: {rel_ref} is {w}x{h} (HD photo requires >= 900px min side).")
+                            continue
+                    rgb = im.convert("RGB")
+                    gray = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2GRAY)
+                    sharp = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+                    if rel_ref.startswith("harvested/") and sharp < 60.0:
+                        issues.append(f"BLURRY ASSET BLOCKED: {rel_ref} ({w}x{h}) Laplacian={sharp:.1f} < 60.0 (not HD sharp).")
+                    elif sharp < 30.0:
+                        warnings.append(f"SOFT/BLURRY ASSET CHECK: {rel_ref} ({w}x{h}) Laplacian={sharp:.1f} < 30.0")
+        except Exception as exc:
+            warnings.append(f"Asset sharpness gate skipped: {exc}")
+
+    # 7. Choreography Diversity & Anti-Cookie-Cutter Check
+    blueprint_file = project_dir / "choreography_blueprint.json"
+    if not blueprint_file.exists():
+        warnings.append(
+            f"CHOREOGRAPHY BLUEPRINT MISSING: {blueprint_file} not found. "
+            "New projects should plan per-beat visual metaphors in choreography_blueprint.json before coding."
+        )
+    img_count = len(re.findall(r"<Img\b", code))
+    dynamic_3d_primitives = sum(
+        1 for kw in ("ScaleComparison3D", "TimelineTrack3D", "GeoStrategicMap3D", "RealPersonSpotlight3D", "CoinStream", "AnatomyCallout3D", "<svg")
+        if kw in code
+    )
+    if img_count >= 5 and dynamic_3d_primitives < 2:
+        issues.append(
+            f"COOKIE-CUTTER LAYOUT DETECTED: Found {img_count} <Img> blocks with only {dynamic_3d_primitives} 3D/SVG motion primitive(s). "
+            "Every beat must vary physical motion metaphors instead of repeating plain image cards."
+        )
 
     return {
         "passed": len(issues) == 0,

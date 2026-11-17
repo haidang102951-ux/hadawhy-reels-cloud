@@ -113,8 +113,9 @@ def auto_choreograph_script_sfx_cues(
         b_ms = int(bt * 1000)
         w_file, w_vol = whoosh_cycle[idx % len(whoosh_cycle)]
         p_file, p_vol = pop_cycle[idx % len(pop_cycle)]
-        add_cue(w_file, b_ms, w_vol, min_gap_ms=400)
-        add_cue(p_file, b_ms + 280, p_vol, min_gap_ms=220)
+        # Pre-impact whoosh 40ms before visual cut + crisp pop right on frame 0 of Hook appearance (never +280ms late!)
+        add_cue(w_file, max(0, b_ms - 40), w_vol, min_gap_ms=400)
+        add_cue(p_file, b_ms + 30, p_vol, min_gap_ms=60)
 
     # 2. Quét ngữ nghĩa từng từ trong `words.json` để điểm huyệt SFX thông minh
     cat_counters = [0] * len(SEMANTIC_SFX_MAP)
@@ -276,36 +277,56 @@ def mix_reels_master_audio(
     # 1. Đường tiếng Giọng đọc Hải Đăng: Lọc sạch tạp âm đáy 85Hz, tăng độ rõ chữ 3.0kHz (+2.8dB)
     vo_filter = (
         f"[0:a]highpass=f=85,"
-        f"equalizer=f=3000:width_type=o:width=1.3:g=2.8,"
+        f"equalizer=f=3000:width_type=o:width=1.3:g=1.8,"
+        f"equalizer=f=6000:width_type=q:width=1.5:g=-2.0,"
         f"volume={voice_volume}[vo_clean]"
     )
 
     # 2. Đường tiếng Nhạc nền Trailer 5 Nhịp:
-    # - Surgical Spectral Pocket (-3.5dB tại 2.5kHz) nhường dải giọng nói nhưng giữ trọn lực đàn dây & trống trận.
+    # - Surgical Spectral Pocket (-5.0dB tại 2.5kHz) nhường trọn dải giọng nói nhưng giữ lực đàn dây & trống trận.
     # - Boost nhẹ sub-bass 90Hz (+2.0dB) tạo độ dày rạp chiếu phim.
     bgm_proc_filter = (
         f"[1:a]atrim=0:{total_duration_sec:.2f},"
-        f"equalizer=f=2500:width_type=o:width=1.2:g=-3.5,"
+        f"equalizer=f=2500:width_type=o:width=1.2:g=-5.0,"
         f"equalizer=f=90:width_type=o:width=1.2:g=2.0,"
         f"volume={bgm_base_volume},"
         f"afade=t=out:st={fade_out_st:.2f}:d=1.2[bgm_eq]"
     )
 
     if vacuum_drops:
-        drop_filters = [f"between(t,{d_st:.2f},{d_end:.2f})" for d_st, d_end in vacuum_drops]
-        cond_str = "+".join(drop_filters)
-        bgm_final_filter = f"[bgm_eq]volume=enable='{cond_str}':volume=0[bgm_final]"
+        # Smooth 120ms ramp-down & ramp-up to prevent harsh digital clicks/pops
+        ramp = 0.12
+        expr_parts = []
+        for d_st, d_end in vacuum_drops:
+            in_end = round(d_st + ramp, 3)
+            out_st = round(max(in_end, d_end - ramp), 3)
+            expr_parts.append(
+                f"if(between(t,{d_st:.3f},{in_end:.3f}),1-((t-{d_st:.3f})/{ramp}),"
+                f"if(between(t,{in_end:.3f},{out_st:.3f}),0,"
+                f"if(between(t,{out_st:.3f},{d_end:.3f}),(t-{out_st:.3f})/{ramp},1)))"
+            )
+        vol_expr = "*".join(expr_parts)
+        bgm_vac_filter = f"[bgm_eq]volume='{vol_expr}':eval=frame[bgm_vac]"
     else:
-        bgm_final_filter = "[bgm_eq]volume=1.0[bgm_final]"
+        bgm_vac_filter = "[bgm_eq]anull[bgm_vac]"
 
-    filter_parts = [vo_filter, bgm_proc_filter, bgm_final_filter]
-    mix_inputs = ["[vo_clean]", "[bgm_final]"]
+    # Smooth sidechain ducking against voiceover so BGM breathes naturally without jarring jumps
+    vo_split = "[vo_clean]asplit=2[vo_mix][vo_sc]"
+    bgm_final_filter = (
+        f"[bgm_vac][vo_sc]sidechaincompress=threshold=0.02:ratio=3.5:attack=45:release=280[bgm_final]"
+    )
 
-    # 3. Nạp các điểm rơi SFX sắc nét
+    filter_parts = [vo_filter, vo_split, bgm_proc_filter, bgm_vac_filter, bgm_final_filter]
+    mix_inputs = ["[vo_mix]", "[bgm_final]"]
+
+    # 3. Nạp các điểm rơi SFX sắc nét + Anti-Harshness EQ (hãm dải chói 5.2kHz)
     for idx, (_, delay_ms, vol) in enumerate(sfx_cues):
         inp_idx = idx + 2
         tag = f"[s{idx}]"
-        filter_parts.append(f"[{inp_idx}:a]adelay={int(delay_ms)}|{int(delay_ms)},volume={vol}{tag}")
+        filter_parts.append(
+            f"[{inp_idx}:a]equalizer=f=5200:width_type=q:width=1.2:g=-3.0,"
+            f"adelay={int(delay_ms)}|{int(delay_ms)},volume={vol}{tag}"
+        )
         mix_inputs.append(tag)
 
     total_inputs = len(mix_inputs)
@@ -330,7 +351,7 @@ def mix_reels_master_audio(
 
         measure_cmd = [
             "ffmpeg", "-i", str(tmp_pre_wav),
-            "-af", "loudnorm=I=-14.0:TP=-1.0:LRA=7:print_format=json",
+            "-af", "loudnorm=I=-14.0:TP=-1.5:LRA=7:print_format=json",
             "-f", "null", "-",
         ]
         m_res = subprocess.run(measure_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -340,7 +361,7 @@ def mix_reels_master_audio(
         stats = json.loads(json_match.group(0))
 
         norm_filter = (
-            f"loudnorm=I=-14.0:TP=-1.0:LRA=7:"
+            f"loudnorm=I=-14.0:TP=-1.5:LRA=7:"
             f"measured_I={stats['input_i']}:measured_TP={stats['input_tp']}:"
             f"measured_LRA={stats['input_lra']}:measured_thresh={stats['input_thresh']}:"
             f"offset={stats['target_offset']}:linear=true"

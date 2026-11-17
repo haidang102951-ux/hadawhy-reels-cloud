@@ -72,10 +72,20 @@ def execute_step3_purge_and_harvest(entities: list[dict]) -> list[dict]:
     return manifest
 
 
+def execute_step4_pre_render_gate(tsx_path: Path, project_dir: Path) -> dict:
+    """Bước 4: Chạy cổng khóa cứng trước render (nền ADN Mức 1 #42B2F2, cấm lưới, cấm karaoke, chặn ảnh mờ)."""
+    from pre_render_gate import inspect_composition
+    res = inspect_composition(tsx_path, project_dir)
+    if not res.get("passed"):
+        raise RuntimeError(f"PRE-RENDER GATE FAILED: {res.get('issues')}")
+    return res
+
+
 def inspect_arsenal_status() -> dict:
     """Kiểm tra toàn diện trạng thái sẵn sàng của Đầu Não Video Ngắn FB."""
-    agents_dir = FB_BRAIN / ".agents" / "agents"
-    skills_dir = FB_BRAIN / ".agents" / "skills" / "fb-reels-master-studio"
+    gemini_cfg = Path.home() / ".gemini" / "config"
+    agents_dir = gemini_cfg / "agents" if (gemini_cfg / "agents").exists() else FB_BRAIN / ".agents" / "agents"
+    skills_dir = gemini_cfg / "skills" / "fb-reels-master-studio" if (gemini_cfg / "skills" / "fb-reels-master-studio").exists() else FB_BRAIN / ".agents" / "skills" / "fb-reels-master-studio"
     sfx_dir = REMOTION_DIR / "public" / "sfx"
     objects_dir = REMOTION_DIR / "public" / "objects"
     harvested_dir = REMOTION_DIR / "public" / "harvested"

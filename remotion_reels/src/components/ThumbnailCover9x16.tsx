@@ -50,6 +50,18 @@ export interface ThumbnailCover9x16Props {
   layoutMode?: "mystery_silhouette" | "dual_confrontation" | "forensic_object" | "titan_evidence";
   /** Optional red forensic circle coordinates for "forensic_object" or "titan_evidence" mode */
   forensicCircle?: { cx: number; cy: number; r: number };
+  /** Optional overrides for foreground hero subject positioning & sizing */
+  heroWidth?: number;
+  heroLeft?: number;
+  heroBottom?: number;
+  /** Optional overrides for secondary evidence card in "titan_evidence" mode */
+  secondaryWidth?: number;
+  secondaryTop?: number;
+  secondaryLeft?: number;
+  /** Optional custom SVG path for the red dashed investigative arrow */
+  arrowPath?: string;
+  /** Optional smooth top-down linear scrim opacity (0 to 1, Zero-Blob) for headline legibility */
+  topScrimOpacity?: number;
   /** Index signature required for Remotion Still compatibility */
   [key: string]: unknown;
 }
@@ -63,7 +75,7 @@ function fitEditorialSize(text: string, baseSize: number, minSize: number): numb
 
 export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
   backgroundPhotoSrc = "harvested/nvidia_empire_real.png",
-  backgroundBlurPx = 0.8,
+  backgroundBlurPx = 0,
   backgroundScale = 1.02,
   backgroundObjectPosition = "50% 50%",
   backgroundBrightness = 0.82,
@@ -83,6 +95,14 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
   mysterySymbol = "?",
   layoutMode = "mystery_silhouette",
   forensicCircle,
+  heroWidth,
+  heroLeft,
+  heroBottom = 0,
+  secondaryWidth = 425,
+  secondaryTop = 815,
+  secondaryLeft = 825,
+  arrowPath = "M 555 620 Q 670 575 740 665",
+  topScrimOpacity = 0,
 }) => {
   const isSilhouette = layoutMode === "mystery_silhouette" ? mysterySilhouetteMode : false;
   const line1Size = fitEditorialSize(headlineLine1, 89, 56);
@@ -125,6 +145,18 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
             filter: backgroundBlurPx > 0
               ? `blur(${backgroundBlurPx}px) brightness(${backgroundBrightness}) contrast(${backgroundContrast}) saturate(${backgroundSaturate})`
               : `brightness(${backgroundBrightness}) contrast(${backgroundContrast}) saturate(${backgroundSaturate})`,
+          }}
+        />
+      )}
+
+      {/* Smooth Zero-Blob Top Scrim for Headline Legibility */}
+      {topScrimOpacity > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: `linear-gradient(180deg, rgba(5, 7, 12, ${topScrimOpacity}) 0%, rgba(5, 7, 12, ${topScrimOpacity * 0.55}) 26%, rgba(5, 7, 12, 0) 48%)`,
+            pointerEvents: "none",
           }}
         />
       )}
@@ -241,9 +273,9 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
               layoutMode === "titan_evidence"
                 ? {
                     position: "absolute",
-                    left: 825,
-                    top: 815,
-                    width: 425,
+                    left: secondaryLeft,
+                    top: secondaryTop,
+                    width: secondaryWidth,
                     transform: "translateX(-50%) rotate(3deg)",
                     zIndex: 5,
                   }
@@ -294,7 +326,7 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
               </marker>
             </defs>
             <path
-              d="M 555 620 Q 670 575 740 665"
+              d={arrowPath}
               fill="none"
               stroke={glowAccentColor}
               strokeWidth={7}
@@ -348,10 +380,11 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
       <div
         style={{
           position: "absolute",
-          left: layoutMode === "forensic_object" && !mysteryOrSecondarySrc ? 540 : 345,
-          bottom: 0,
-          width: layoutMode === "forensic_object" && !mysteryOrSecondarySrc ? 1020 : 990,
+          left: heroLeft ?? (layoutMode === "forensic_object" && !mysteryOrSecondarySrc ? 540 : 345),
+          bottom: heroBottom,
+          width: heroWidth ?? (layoutMode === "forensic_object" && !mysteryOrSecondarySrc ? 1020 : 990),
           transform: "translateX(-50%)",
+          zIndex: 6,
         }}
       >
         <Img

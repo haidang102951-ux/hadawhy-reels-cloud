@@ -92,7 +92,7 @@ jobs:
         if: ${{ env.HAS_MODAL != 'true' }}
         run: |
           cd remotion_reels && npm install
-          python -m pip install --upgrade pip google-genai vieneu edge-tts "rembg[cpu]" pillow requests
+          python -m pip install --upgrade pip google-genai vieneu edge-tts "rembg[cpu]" opencv-python-headless numpy pillow requests
 
       - name: Run Cloud Reels Pipeline
         if: ${{ env.HAS_MODAL != 'true' }}

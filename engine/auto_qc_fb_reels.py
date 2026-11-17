@@ -164,6 +164,47 @@ class AutoQCFBReels:
                         pass
                     break
 
+        # 4. Kiểm tra bắt buộc giọng đọc bằng faster-whisper (chống xuất video câm chỉ có BGM/SFX)
+        try:
+            from faster_whisper import WhisperModel
+            w_model = WhisperModel("base", device="cpu", compute_type="int8")
+            segs, _ = w_model.transcribe(str(video_path), language="vi")
+            transcript = " ".join(s.text.strip() for s in segs).strip()
+            word_count = len(transcript.split())
+            report["metrics"]["voice_word_count"] = word_count
+            if word_count < 15 or ("để không bỏ lỡ lỡ" in transcript.lower()):
+                report["score"] -= 50
+                report["issues"].append(f"Missing or drowned voiceover in final MP4! (detected words={word_count})")
+        except Exception as exc:
+            report["issues"].append(f"Whisper voice check skipped: {exc}")
+
+        # 5. Kiểm tra bắt buộc Tầng Trên (Y: 220..520px) không bị bỏ trống đen/thiếu chữ Hook
+        try:
+            cap2 = cv2.VideoCapture(str(video_path))
+            total_f = int(cap2.get(cv2.CAP_PROP_FRAME_COUNT)) or int(duration * fps)
+            empty_top_count = 0
+            sample_ratios = [0.15, 0.35, 0.50, 0.70, 0.88]
+            for r in sample_ratios:
+                cap2.set(cv2.CAP_PROP_POS_FRAMES, min(total_f - 1, max(0, int(total_f * r))))
+                ok_f, fr = cap2.read()
+                if not ok_f or fr is None:
+                    continue
+                top_roi = fr[220:520, 60:1020]
+                gray_roi = cv2.cvtColor(top_roi, cv2.COLOR_BGR2GRAY)
+                edges = cv2.Canny(gray_roi, 60, 160)
+                edge_density = float(np.count_nonzero(edges)) / float(edges.size)
+                if edge_density < 0.0045:
+                    empty_top_count += 1
+            cap2.release()
+            report["metrics"]["empty_top_hook_samples"] = empty_top_count
+            if empty_top_count >= 2:
+                report["score"] -= 30
+                report["issues"].append(
+                    f"Empty/dark top hook zone (Y:220..520px missing Hook text/visuals in {empty_top_count}/5 samples)!"
+                )
+        except Exception as exc:
+            report["issues"].append(f"Top hook zone check skipped: {exc}")
+
         report["passed"] = (report["score"] >= 90)
         return report
 

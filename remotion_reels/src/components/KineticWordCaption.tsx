@@ -187,7 +187,7 @@ interface KineticWordCaptionProps {
 
 export const KineticWordCaption: React.FC<KineticWordCaptionProps> = ({
   phrases = MASTER_20S_PHRASES,
-  placement = "top",
+  placement = "bottom",
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -205,7 +205,7 @@ export const KineticWordCaption: React.FC<KineticWordCaptionProps> = ({
     <div
       style={{
         position: "absolute",
-        ...(placement === "bottom" ? { bottom: 215 } : { top: 108 }),
+        ...(placement === "bottom" ? { bottom: 290 } : { top: 135 }),
         left: 0,
         right: 0,
         width: 1080,

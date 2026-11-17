@@ -229,6 +229,11 @@ def enhance_backdrop_3d_seamless(
     """
     im = Image.open(raw_img_path).convert("RGB")
     w, h = im.size
+    if w < 750 or h < 500:
+        raise ValueError(
+            f"[THUMBNAIL HD GATE BLOCKED] Ảnh nền '{raw_img_path.name}' quá nhỏ ({w}x{h} < 750x500). "
+            "Cấm dùng ảnh nhỏ cắt dọc gây vỡ hạt/mờ nhòe!"
+        )
 
     target_ratio = 9.0 / 16.0
     current_ratio = w / float(h)

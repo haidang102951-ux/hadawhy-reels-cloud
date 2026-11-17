@@ -132,6 +132,35 @@ def _fetch_wikipedia_image(query: str) -> bytes | None:
     return None
 
 
+def _check_image_hd_and_sharp(
+    raw_bytes: bytes,
+    min_w: int = 800,
+    min_h: int = 500,
+    min_sharpness: float = 45.0,
+) -> tuple[bool, int, int, float]:
+    """Verify real decoded image dimensions and Laplacian sharpness to block blurry/pixelated photos."""
+    from PIL import Image, ImageFilter, ImageStat  # type: ignore
+
+    with Image.open(io.BytesIO(raw_bytes)) as im:
+        im.load()
+        w, h = im.size
+        if w < min_w or h < min_h:
+            return False, w, h, 0.0
+        rgb = im.convert("RGB")
+        scale = 512.0 / min(w, h)
+        if scale < 1.0:
+            rgb = rgb.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
+        try:
+            import cv2  # type: ignore
+            import numpy as np  # type: ignore
+            gray = cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2GRAY)
+            sharp = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+        except Exception:
+            edges = rgb.convert("L").filter(ImageFilter.FIND_EDGES)
+            sharp = float(ImageStat.Stat(edges).var[0])
+        return sharp >= min_sharpness, w, h, sharp
+
+
 def _fetch_wikimedia_image(query: str) -> bytes | None:
     import requests  # type: ignore
 
@@ -141,7 +170,7 @@ def _fetch_wikimedia_image(query: str) -> bytes | None:
         "generator": "search",
         "gsrnamespace": "6",
         "gsrsearch": query,
-        "gsrlimit": "6",
+        "gsrlimit": "8",
         "prop": "imageinfo",
         "iiprop": "url|mime|size",
         "iiurlwidth": "1280",
@@ -157,10 +186,13 @@ def _fetch_wikimedia_image(query: str) -> bytes | None:
             width = int(info.get("width") or 0)
             height = int(info.get("height") or 0)
             img_url = info.get("thumburl") or info.get("url")
-            if img_url and mime in ("image/jpeg", "image/png", "image/webp") and min(width, height) >= 500:
+            if img_url and mime in ("image/jpeg", "image/png", "image/webp") and min(width, height) >= 750:
                 img_resp = requests.get(img_url, headers=headers, timeout=25)
-                if img_resp.ok and len(img_resp.content) > 20000:
-                    return img_resp.content
+                if img_resp.ok and len(img_resp.content) > 25000:
+                    ok, rw, rh, sharp = _check_image_hd_and_sharp(img_resp.content, min_w=750, min_h=500)
+                    if ok:
+                        print(f"[WIKIMEDIA OK] {rw}x{rh}, sharp={sharp:.1f} for '{query}'")
+                        return img_resp.content
     except Exception as exc:
         print(f"[HARVEST] Wikimedia fallback for '{query}': {exc}")
     return None
@@ -198,10 +230,64 @@ _STOCK_WATERMARK_DOMAINS = (
 )
 
 
+def _call_gemini_vision(prompt: str, images_bytes: list[bytes], max_tokens: int = 256) -> str | None:
+    """Call Gemini Vision API (gemini-2.5-flash / gemini-flash-latest) with JPEG thumbnails."""
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key or not images_bytes:
+        return None
+    import base64
+    import requests  # type: ignore
+    from PIL import Image  # type: ignore
+
+    parts: list[dict] = [{"text": prompt}]
+    for raw in images_bytes:
+        with Image.open(io.BytesIO(raw)) as im:
+            thumb = im.convert("RGB")
+            thumb.thumbnail((768, 768))
+            buf = io.BytesIO()
+            thumb.save(buf, "JPEG", quality=82)
+            b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        parts.append({"inlineData": {"mimeType": "image/jpeg", "data": b64}})
+
+    for model in ("gemini-2.5-flash", "gemini-flash-latest"):
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        try:
+            r = requests.post(
+                url,
+                json={
+                    "contents": [{"parts": parts}],
+                    "generationConfig": {"temperature": 0.1, "maxOutputTokens": max_tokens},
+                },
+                timeout=45,
+            )
+            if r.ok:
+                cands = r.json().get("candidates") or []
+                if cands:
+                    return str(cands[0]["content"]["parts"][0]["text"]).strip()
+        except Exception as exc:
+            print(f"[GEMINI-VISION] {model} error: {exc}")
+    return None
+
+
 def _vision_pick_best_image(query: str, candidates: list[bytes]) -> bytes:
-    """Use OpenRouter free Vision model to pick the cleanest, exact-matching real photo among Google Image candidates."""
+    """Use Gemini Vision (primary) or OpenRouter free Vision to pick the cleanest real photo."""
     if len(candidates) <= 1:
         return candidates[0]
+
+    pick_prompt = (
+        f"Pick the single best real, crisp HD photograph for query: '{query}'. "
+        "Reject any image that is blurry, pixelated, low-resolution, has watermarks, big text overlays, cartoons, "
+        "wrong era, or wrong cultural context (if Vietnam-related, prefer authentic Vietnamese people/settings). "
+        f"Reply ONLY with the single integer index (0 to {len(candidates) - 1})."
+    )
+    gem_ans = _call_gemini_vision(pick_prompt, candidates, max_tokens=16)
+    if gem_ans:
+        for ch in gem_ans:
+            if ch.isdigit() and int(ch) < len(candidates):
+                pick = int(ch)
+                print(f"[VISION] (Gemini) Picked candidate #{pick}/{len(candidates)} for '{query}'")
+                return candidates[pick]
+
     or_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if not or_key:
         return candidates[0]
@@ -210,17 +296,8 @@ def _vision_pick_best_image(query: str, candidates: list[bytes]) -> bytes:
         import requests  # type: ignore
         from PIL import Image  # type: ignore
 
-        content: list[dict] = [
-            {
-                "type": "text",
-                "text": (
-                    f"Pick the single best real photograph for query: '{query}'. "
-                    "Reject any image with watermarks, big text overlays, cartoons, or wrong subject. "
-                    f"Reply ONLY with the single integer index (0 to {len(candidates) - 1})."
-                ),
-            }
-        ]
-        for idx, raw in enumerate(candidates):
+        content: list[dict] = [{"type": "text", "text": pick_prompt}]
+        for raw in candidates:
             with Image.open(io.BytesIO(raw)) as im:
                 thumb = im.convert("RGB")
                 thumb.thumbnail((384, 384))
@@ -248,6 +325,31 @@ def _vision_pick_best_image(query: str, candidates: list[bytes]) -> bytes:
     return candidates[0]
 
 
+def _vision_verify_cutout(png_bytes: bytes, query: str) -> bool:
+    """Verify cutout PNG via Gemini Vision: reject jagged halos, sliced limbs/heads, or empty cutouts."""
+    if not os.getenv("GEMINI_API_KEY", "").strip():
+        return True
+    from PIL import Image  # type: ignore
+
+    with Image.open(io.BytesIO(png_bytes)) as im:
+        rgba = im.convert("RGBA")
+        bg = Image.new("RGB", rgba.size, (18, 28, 48))
+        bg.paste(rgba, mask=rgba.getchannel("A"))
+        buf = io.BytesIO()
+        bg.save(buf, "JPEG", quality=85)
+    ans = _call_gemini_vision(
+        f"Inspect this background-removed cutout for '{query}' placed on dark blue background. "
+        "Reply PASS if the subject is intact, clean edges, no severe jagged white/grey halo, and matches the subject. "
+        "Reply FAIL if cut off, badly jagged, or garbage.",
+        [buf.getvalue()],
+        max_tokens=32,
+    )
+    if ans and "FAIL" in ans.upper():
+        print(f"[VISION-CUTOUT] Rejected cutout for '{query}': {ans}")
+        return False
+    return True
+
+
 def _fetch_serper_google_image(query: str) -> bytes | None:
     serper_key = os.getenv("SERPER_API_KEY", "").strip()
     if not serper_key:
@@ -259,14 +361,15 @@ def _fetch_serper_google_image(query: str) -> bytes | None:
         r = requests.post(
             "https://google.serper.dev/images",
             headers={"X-API-KEY": serper_key, "Content-Type": "application/json"},
-            json={"q": query, "num": 8},
+            json={"q": query, "num": 12},
             timeout=20,
         )
         if not r.ok:
             print(f"[SERPER] HTTP {r.status_code}: {r.text[:200]}")
             return None
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/125.0 Safari/537.36"}
-        valid_candidates: list[bytes] = []
+        hd_candidates: list[bytes] = []
+        fallback_candidates: list[bytes] = []
         for img in r.json().get("images", []):
             img_url = str(img.get("imageUrl") or "").strip()
             w = int(img.get("imageWidth") or 0)
@@ -274,19 +377,27 @@ def _fetch_serper_google_image(query: str) -> bytes | None:
             low = img_url.lower()
             if not img_url or any(d in low for d in _STOCK_WATERMARK_DOMAINS):
                 continue
-            if low.endswith((".svg", ".tif", ".tiff", ".gif")) or min(w, h) < 400:
+            if low.endswith((".svg", ".tif", ".tiff", ".gif")) or w < 650 or h < 450:
                 continue
             try:
                 resp = requests.get(img_url, headers=headers, timeout=12)
                 ctype = resp.headers.get("content-type", "").lower()
-                if resp.ok and len(resp.content) > 20000 and ctype.startswith("image/") and "svg" not in ctype:
-                    with Image.open(io.BytesIO(resp.content)) as test_im:
-                        test_im.verify()
-                    valid_candidates.append(resp.content)
-                    if len(valid_candidates) >= 3:
-                        break
+                if resp.ok and len(resp.content) > 25000 and ctype.startswith("image/") and "svg" not in ctype:
+                    ok_hd, rw, rh, sharp = _check_image_hd_and_sharp(resp.content, min_w=800, min_h=500, min_sharpness=45.0)
+                    if ok_hd:
+                        print(f"[SERPER HD] {rw}x{rh}, sharp={sharp:.1f} <- {img_url[:70]}")
+                        hd_candidates.append(resp.content)
+                        if len(hd_candidates) >= 3:
+                            break
+                    else:
+                        ok_fb, rw, rh, sharp = _check_image_hd_and_sharp(resp.content, min_w=650, min_h=450, min_sharpness=45.0)
+                        if ok_fb:
+                            fallback_candidates.append(resp.content)
+                        else:
+                            print(f"[SERPER REJECT] {rw}x{rh}, sharp={sharp:.1f} <- {img_url[:70]}")
             except Exception:
                 continue
+        valid_candidates = hd_candidates or fallback_candidates[:3]
         if valid_candidates:
             return _vision_pick_best_image(query, valid_candidates)
     except Exception as exc:
@@ -336,8 +447,14 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
         return
 
     from PIL import Image, ImageEnhance, ImageFilter, ImageStat  # type: ignore
+    rembg_session = None
     try:
-        from rembg import remove  # type: ignore
+        from rembg import new_session, remove  # type: ignore
+        try:
+            rembg_session = new_session("bria-rmbg")
+            print("[AGENT-3 HARVEST] Using rembg session: bria-rmbg")
+        except Exception:
+            rembg_session = None
     except Exception:
         remove = None
 
@@ -359,7 +476,7 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
 
         if remove_bg and remove is not None:
             try:
-                cut_bytes = remove(raw_bytes)
+                cut_bytes = remove(raw_bytes, session=rembg_session) if rembg_session is not None else remove(raw_bytes)
                 img = Image.open(io.BytesIO(cut_bytes)).convert("RGBA")
                 alpha = img.getchannel("A")
                 total_px = max(1, img.width * img.height)
@@ -375,9 +492,14 @@ def harvest_assets(plan: dict, clean: bool = False) -> None:
                         img = ImageEnhance.Brightness(img).enhance(1.22)
                         img = ImageEnhance.Contrast(img).enhance(1.12)
                     img = img.filter(ImageFilter.UnsharpMask(radius=1.5, percent=150, threshold=2))
-                    img.save(out_path, "PNG")
-                    continue
-                print(f"[AGENT-3 HARVEST] rembg ratio={opaque_ratio:.2f} out of safe range for {filename}, keeping sharp full photo")
+                    check_buf = io.BytesIO()
+                    img.save(check_buf, "PNG")
+                    if _vision_verify_cutout(check_buf.getvalue(), query):
+                        out_path.write_bytes(check_buf.getvalue())
+                        continue
+                    print(f"[AGENT-3 HARVEST] Vision rejected cutout for {filename}, keeping sharp full photo")
+                else:
+                    print(f"[AGENT-3 HARVEST] rembg ratio={opaque_ratio:.2f} out of safe range for {filename}, keeping sharp full photo")
             except Exception as exc:
                 print(f"[AGENT-3 HARVEST] rembg failed for {filename}: {exc}")
 
@@ -700,7 +822,7 @@ def mode_create(topic_prompt: str) -> None:
     # Fast bypass: if caller already provides JSON scene_plan, skip LLM completely
     if topic_prompt.lstrip().startswith("{"):
         parsed = _build_captions_from_scenes(_extract_json_object(topic_prompt))
-        parsed["fps"] = 30
+        parsed["fps"] = 60
         PLAN_PATH.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[CREATE] Loaded direct JSON scene_plan into {PLAN_PATH}")
         harvest_assets(parsed, clean=True)
@@ -793,7 +915,7 @@ Mọi file "harvested/<name>.png" dùng trong scenes phải có trong assetSpecs
     print("[AGENT-1 SCRIPT] Drafting investigative 5-beat script...")
     parsed = _call_gemini_json(prompt)
     parsed = _agent_2_editor_qa(parsed)
-    parsed["fps"] = 30
+    parsed["fps"] = 60
     harvest_assets(parsed, clean=True)
     parsed = _agent_3_prune_missing_assets(parsed)
     PLAN_PATH.write_text(json.dumps(parsed, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -967,6 +1089,67 @@ def build_audio_track(plan: dict, temp_dir: Path) -> Path | None:
     _build_captions_from_scenes(plan)
     PLAN_PATH.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    # Export words.json, script_scenes.json & choreography_blueprint.json for pre_render_gate & TSX director
+    gate_dir = OUT_DIR / "gate_tmp"
+    gate_dir.mkdir(parents=True, exist_ok=True)
+    words_flat: list[dict] = []
+    for cap in plan.get("captions", []):
+        for line in cap.get("lines", []):
+            for tok in line:
+                words_flat.append({
+                    "word": tok.get("text", ""),
+                    "start": round(float(tok.get("startSec", 0)), 3),
+                    "end": round(float(tok.get("endSec", 0)), 3),
+                })
+    (gate_dir / "words.json").write_text(
+        json.dumps({"audio_duration_sec": round(total_dur, 2), "words": words_flat}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (gate_dir / "script_scenes.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": sc.get("id"),
+                    "start": sc.get("startSec"),
+                    "end": sc.get("endSec"),
+                    "narration": sc.get("narration", ""),
+                    "heroText": sc.get("heroText", ""),
+                    "layout": sc.get("layout", ""),
+                }
+                for sc in scenes
+            ],
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    blueprint = {
+        "projectTitle": plan.get("projectTitle", "HaDaWhy_Cloud_Video"),
+        "fps": int(plan.get("fps", 60)),
+        "totalDurationSec": round(total_dur, 2),
+        "beats": [
+            {
+                "id": sc.get("id"),
+                "startSec": sc.get("startSec"),
+                "endSec": sc.get("endSec"),
+                "layout": sc.get("layout"),
+                "heroText": sc.get("heroText"),
+                "eyebrow": sc.get("eyebrow"),
+                "primaryAsset": sc.get("primaryAsset", ""),
+                "rightAsset": sc.get("rightAsset", ""),
+                "statNumber": sc.get("statNumber"),
+                "statSuffix": sc.get("statSuffix"),
+                "chainSteps": sc.get("chainSteps", []),
+                "infoTags": sc.get("infoTags", []),
+                "narration": sc.get("narration", ""),
+            }
+            for sc in scenes
+        ],
+    }
+    (gate_dir / "choreography_blueprint.json").write_text(
+        json.dumps(blueprint, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
     # 2. Rich Multi-Layer Contextual SFX Hooks (scene impact + odometer ticks + causal pops + infoTags)
     sfx_entries: list[tuple[Path, int, float]] = []
     sfx_map["causal_chain"] = sfx_dir / "gear_lock.mp3"
@@ -1107,8 +1290,8 @@ def _agent_5_visual_qc(out_mp4: Path) -> str:
         return "QC completed"
 
 
-def _agent_6_thumbnail_and_seo(plan: dict) -> None:
-    """Agent 6: Render 9:16 ThumbnailCover9x16 + write viral Title/SEO Hashtags and send to Telegram."""
+def _agent_6_thumbnail_and_seo(plan: dict) -> tuple[Path | None, str]:
+    """Agent 6: Render 9:16 ThumbnailCover9x16 + write 3 Evergreen SEO titles and return (thumb_png, caption)."""
     try:
         scenes = plan.get("scenes", [])
         harvested_files = sorted(
@@ -1116,7 +1299,7 @@ def _agent_6_thumbnail_and_seo(plan: dict) -> None:
         )
         if not harvested_files:
             print("[AGENT-6 THUMB/SEO] No harvested images available, skipping thumbnail.")
-            return
+            return None, ""
 
         hero_img = ""
         bg_img = ""
@@ -1140,19 +1323,22 @@ def _agent_6_thumbnail_and_seo(plan: dict) -> None:
         title = plan.get("projectTitle", "HaDaWhy_Cloud_Video")
 
         seo_prompt = (
-            "Bạn là Chuyên gia Thumbnail & SEO kênh HaDa Why (@hadawhy). Dựa trên kịch bản sau, hãy trả về JSON gồm:\n"
+            "Bạn là Chuyên gia Thumbnail & SEO Evergreen kênh HaDa Why (@hadawhy). Dựa trên kịch bản sau, hãy trả về JSON gồm:\n"
             '{"line1": "DÒNG 1 NGẮN 3-5 TỪ IN HOA", "line2": "DÒNG 2 NGẮN 3-5 TỪ IN HOA", '
-            '"viralTitle": "Tiêu đề Reels/TikTok/Shorts giật tò mò", "hashtags": "#HaDaWhy #KinhTe #CongNghe ..."}\n'
+            '"seoTitles": ["Tiêu đề SEO 1 (giật tò mò)", "Tiêu đề SEO 2 (nhấn con số/bí mật)", "Tiêu đề SEO 3 (chuẩn tìm kiếm Evergreen)"], '
+            '"hashtags": "#HaDaWhy #KinhTe #CongNghe ..."}\n'
             f"Kịch bản: {json.dumps([s.get('narration', '') for s in scenes], ensure_ascii=False)}"
         )
         line1, line2 = first_hero, second_hero
-        viral_title = f"{first_hero} — {second_hero}"
+        seo_titles = [f"{first_hero} — {second_hero}"]
         hashtags = "#HaDaWhy #BiMatThuongHieu #KienThucThuVi #ReelsVN"
         try:
             seo = _call_gemini_json(seo_prompt, require_scenes=False)
             line1 = str(seo.get("line1") or line1).upper()
             line2 = str(seo.get("line2") or line2).upper()
-            viral_title = str(seo.get("viralTitle") or viral_title)
+            raw_titles = seo.get("seoTitles") or ([seo.get("viralTitle")] if seo.get("viralTitle") else [])
+            if isinstance(raw_titles, list) and raw_titles:
+                seo_titles = [str(t).strip() for t in raw_titles if str(t).strip()][:3]
             hashtags = str(seo.get("hashtags") or hashtags)
         except Exception as exc:
             print(f"[AGENT-6 THUMB/SEO] LLM SEO fallback: {exc}")
@@ -1200,16 +1386,43 @@ def _agent_6_thumbnail_and_seo(plan: dict) -> None:
             ],
             cwd=REMOTION_DIR,
         )
+        titles_block = "\n".join(f"{i}. {t}" for i, t in enumerate(seo_titles, start=1))
+        seo_caption = f"🖼️ THUMBNAIL 9:16 & 3 TIÊU ĐỀ SEO EVERGREEN\n{titles_block}\n\n{hashtags}"
         if thumb_png.exists():
-            send_telegram_photo(thumb_png, f"🖼️ THUMBNAIL 9:16 & SEO\n📌 {viral_title}\n{hashtags}")
-            print(f"[AGENT-6 THUMB/SEO] Generated and sent {thumb_png.name}")
+            print(f"[AGENT-6 THUMB/SEO] Generated {thumb_png.name}")
+            return thumb_png, seo_caption
+        return None, seo_caption
     except Exception as exc:
         print(f"[AGENT-6 THUMB/SEO] Warning: {exc}")
+        return None, ""
 
 
 def _call_llm_text(prompt: str) -> str:
-    """Call GitHub Models / OpenRouter / DeepSeek for raw TSX code generation without JSON wrapping."""
+    """Call Gemini (primary) / GitHub Models / OpenRouter / DeepSeek for raw TSX code generation."""
     import requests  # type: ignore
+
+    gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if gemini_key:
+        for model in ("gemini-2.5-flash", "gemini-flash-latest"):
+            try:
+                print(f"[AGENT-4 TSX] Calling Gemini {model}...")
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={gemini_key}"
+                r = requests.post(
+                    url,
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {"temperature": 0.25, "maxOutputTokens": 8192},
+                    },
+                    timeout=90,
+                )
+                if r.ok:
+                    cands = r.json().get("candidates") or []
+                    if cands:
+                        text = str(cands[0]["content"]["parts"][0]["text"]).strip()
+                        if "export const DynamicReel" in text:
+                            return text
+            except Exception as exc:
+                print(f"[AGENT-4 TSX] Gemini {model} error: {exc}")
 
     gh_token = os.getenv("GH_MODELS_TOKEN", "").strip()
     if gh_token:
@@ -1276,82 +1489,174 @@ def _extract_tsx_code(raw: str) -> str:
     return text.strip()
 
 
+def _vision_inspect_beat_stills(still_paths: list[Path]) -> str | None:
+    """Send per-beat rendered still PNGs to Gemini Vision to catch overlapping text, clipping, black frames, or jagged cutouts."""
+    if not still_paths or not os.getenv("GEMINI_API_KEY", "").strip():
+        return None
+    raw_imgs = [p.read_bytes() for p in still_paths if p.exists()]
+    if not raw_imgs:
+        return None
+    prompt = (
+        "Bạn là Giám đốc QC Thị Giác cho video dọc 9:16 (1080x1920). "
+        "Hãy soi kỹ các khung hình (still) của từng Beat vừa render:\n"
+        "1. Có chữ bị đè lên nhau, rớt dòng xấu hoặc tràn ra ngoài Safe Zone (lề phải >920px, đáy >1620px, đỉnh <160px) không?\n"
+        "2. Có ảnh bị đen, mất hình, trơ ảnh phẳng vô hồn hay viền tách nền răng cưa nặng không?\n"
+        "3. Có hộp nền đục xấu che mất bối cảnh không?\n"
+        "Nếu TẤT CẢ đều ổn, trả lời đúng 1 từ: PASS\n"
+        "Nếu có lỗi, trả lời bắt đầu bằng FAIL: <liệt kê lỗi ngắn gọn từng Beat để sửa code TSX>."
+    )
+    ans = _call_gemini_vision(prompt, raw_imgs, max_tokens=300)
+    if ans and ans.upper().startswith("FAIL"):
+        return ans
+    return None
+
+
 def _agent_4_tsx_director(plan: dict) -> str:
-    """Agent 4 Motion Director: Write custom DynamicReel.tsx per video (like MasterShowcase20s) + tsc --noEmit self-repair loop."""
+    """Bước C & D: AI tự viết DynamicReel.tsx + vòng lặp tsc --noEmit + pre_render_gate + remotion still Vision QC."""
     dyn_path = REMOTION_DIR / "src" / "DynamicReel.tsx"
     safe_backup = dyn_path.read_text(encoding="utf-8") if dyn_path.exists() else ""
 
     harvested_list = sorted([f"harvested/{p.name}" for p in HARVESTED_DIR.glob("*.png") if p.stat().st_size > 1024])
-    fps = int(plan.get("fps", 30))
+    fps = int(plan.get("fps", 60))
+    scenes = plan.get("scenes", [])
     scenes_brief = [
         {
             "id": s.get("id"),
             "fromFrame": int(round(float(s.get("startSec", 0)) * fps)),
             "durationFrames": max(15, int(round((float(s.get("endSec", 3)) - float(s.get("startSec", 0))) * fps))),
+            "layout": s.get("layout", ""),
             "heroText": s.get("heroText"),
             "eyebrow": s.get("eyebrow"),
             "primaryAsset": s.get("primaryAsset", ""),
+            "rightAsset": s.get("rightAsset", ""),
             "statNumber": s.get("statNumber"),
             "statSuffix": s.get("statSuffix"),
             "infoTags": s.get("infoTags", []),
             "chainSteps": s.get("chainSteps", []),
             "narration": s.get("narration", ""),
         }
-        for s in plan.get("scenes", [])
+        for s in scenes
     ]
 
-    tsx_prompt = f"""Bạn là Kỹ Sư Đạo Diễn Remotion 3D (`fb-reels-motion-3d-director`). Hãy viết MỘT FILE CODE `DynamicReel.tsx` ĐỘC BẢN (KHÔNG dùng template slideshow cũ!) cho video 9:16 (1080x1920, {fps} fps).
+    ref_snippet = ""
+    for ref_name in ("RapPhimBongNgo42s.tsx", "NvidiaSuccession40s.tsx"):
+        ref_file = REMOTION_DIR / "src" / ref_name
+        if ref_file.exists():
+            ref_snippet += f"\n--- MẪU THAM CHIẾU ({ref_name}) ---\n" + "\n".join(ref_file.read_text(encoding="utf-8").splitlines()[:85]) + "\n"
 
-CÁC COMPONENT CÓ SẴN ĐƯỢC IMPORT ĐÚNG ĐƯỜNG DẪN:
+    tsx_prompt = f"""Bạn là Kỹ Sư Đạo Diễn Remotion 3D (`fb-reels-motion-3d-director`). Hãy viết MỘT FILE CODE `DynamicReel.tsx` ĐỘC BẢN cho video 9:16 (1080x1920, {fps} fps).
+
+CÁC COMPONENT CHUẨN CÓ SẴN & EXACT PROPS:
 - `import React from "react";`
 - `import {{ AbsoluteFill, Img, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig }} from "remotion";`
-- `import {{ HaDaWhyMistBackground }} from "./components/HaDaWhyMistBackground";`
-- `import {{ ChannelWatermark9x16 }} from "./components/ChannelWatermark9x16";`
-- `import {{ KineticWordCaption }} from "./components/KineticWordCaption";`
+- `import {{ HaDaWhyMistBackground }} from "./components/HaDaWhyMistBackground";` // props: intensity?: number, accentHex?: string
+- `import {{ HaDaWhyFontFaces, KineticHookHeader }} from "./components/KineticHookHeader";` // KineticHookHeader props: beat={{start:number, eyebrow:string, hero:string, accent:string, heroSize?:number}}, top?:number
+- `import {{ ChannelWatermark9x16 }} from "./components/ChannelWatermark9x16";` // no required props
+- `import {{ ScaleComparison3D }} from "./components/ScaleComparison3D";` // props: startFrame, endFrame, leftItemSrc, leftItemCount, leftLabel, rightTopTitle, rightTargetNumber, rightUnitSuffix, rightLabel, stampText?
+- `import {{ TimelineTrack3D }} from "./components/TimelineTrack3D";` // props: startFrame, endFrame, milestones: {{dateLabel, title, iconOrCutoutSrc, accentColor?, triggerOffsetFrames}}[]
+- `import {{ GeoStrategicMap3D }} from "./components/GeoStrategicMap3D";` // props: startFrame, endFrame, originLabel, targetLabel, evidenceImageSrc?, evidenceTitle?
 - `import {{ StickerPop }} from "./components/StickerPop";`
 - `import {{ CoinStream }} from "./components/CoinStream";`
 - `import defaultPlan from "./scene_plan.json";`
 - `import {{ UniversalScenePlan }} from "./HaDaWhyUniversal9x16";`
 
-YÊU CẦU KỸ THUẬT DỰNG PHIM ĐIỆN ẢNH (LÀM GIỐNG HỆT MasterShowcase20s.tsx):
-1. Export đúng `export const DynamicReel: React.FC<{{ plan?: UniversalScenePlan }}> = ({{ plan = defaultPlan as unknown as UniversalScenePlan }}) => {{ ... }};`
-2. Dùng `const frame = useCurrentFrame(); const {{ fps }} = useVideoConfig();`
-3. Dựng **Camera Rig 3D chuyển động mượt** (rung chấn nhẹ ở điểm đập `Math.sin(dt * 2.9)`, zoom/pan mượt, chuyển cảnh bằng `<Sequence from={{...}} durationInFrames={{...}}>`).
-4. **ĐA DẠNG BỐ CỤC TỪNG CẢNH (100% ẢNH THẬT, CẤM ICON HOẠT HÌNH):**
-   - CHỈ dùng ảnh thật từ danh sách: `{json.dumps(harvested_list)}` qua `<Img src={{staticFile("...")}} />` (TUYỆT ĐỐI CẤM dùng `objects/*.png` hay icon hoạt hình).
-   - Cảnh 1 (Hook): Ảnh thật tràn màn hình / Ken Burns zoom + chữ Hook to rõ (`maxWidth: 920`, không tràn mép, có `textShadow` viền đen dày).
-   - Cảnh có số liệu: Số đếm nhảy động (`interpolate` + `Math.round`) + ảnh thật có bóng đổ 3D (`drop-shadow`) và viền sáng, hoặc `CoinStream` khi nói về dòng tiền.
-   - Cảnh cơ chế/chuỗi sự kiện: Đường nối SVG động (`strokeDashoffset`) hoặc thẻ bước trượt vào từ 2 bên kết hợp ảnh thật.
-5. BẮT BUỘC render `<ChannelWatermark9x16 />` và `<KineticWordCaption phrases={{plan.captions || []}} />` ở lớp trên cùng!
-6. Mọi chữ tiếng Việt có dấu chuẩn, `maxWidth: 920, textAlign: "center", wordBreak: "break-word"`, không bao giờ tràn màn hình 1080px.
+YÊU CẦU KỸ THUẬT BẮT BUỘC:
+1. Export đúng: `export const DynamicReel: React.FC<{{ plan?: UniversalScenePlan }}> = ({{ plan = defaultPlan as unknown as UniversalScenePlan }}) => {{ ... }};`
+2. BẮT BUỘC render `<HaDaWhyFontFaces />` và `<HaDaWhyMistBackground intensity={0.11} accentHex="66, 178, 242" />` ở lớp nền, và `<ChannelWatermark9x16 />` ở lớp trên cùng!
+3. BẮT BUỘC dùng `<KineticHookHeader />` (hoặc `spring` slam) cho tiêu đề tầng trên (`top: 240..480px`), `maxWidth: 900`, ZERO-BOX (tuyệt đối CẤM `backgroundColor: "rgba(...,0.4..0.9)"` bọc chữ; chỉ dùng `WebkitTextStroke` + `textShadow`).
+4. Tầng giữa (`top: 520..1580px`): Phối hợp chuyển động đa lớp cho ảnh thật (`{json.dumps(harvested_list)}`), sử dụng `ScaleComparison3D` / `TimelineTrack3D` / `GeoStrategicMap3D` / số đếm Odometer / sơ đồ SVG tùy ngữ cảnh từng Beat. Nếu kịch bản nhắc quốc gia/thế giới, ưu tiên dùng `<GeoStrategicMap3D />` hoặc `<svg>`.
+5. CẤM tuyệt đối `objects/*_3d.png` (icon nhựa hoạt hình) và CẤM phụ đề karaoke đáy màn hình.
+{ref_snippet}
 
-DỮ LIỆU CÁC CẢNH CẦN DỰNG:
+DỮ LIỆU CHOREOGRAPHY CÁC BEAT ({fps} fps):
 {json.dumps(scenes_brief, ensure_ascii=False, indent=2)}
 
 CHỈ trả về code TypeScript hoàn chỉnh cho `DynamicReel.tsx` (bắt đầu bằng `import React from "react";`, không giải thích thêm)."""
+
+    gate_dir = OUT_DIR / "gate_tmp"
+    still_dir = OUT_DIR / "beat_stills"
+    still_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        sys.path.insert(0, str(BASE_DIR / "engine"))
+        from pre_render_gate import inspect_composition  # type: ignore
+    except Exception:
+        inspect_composition = None
 
     current_prompt = tsx_prompt
     for attempt in range(1, 4):
         try:
             raw_code = _call_llm_text(current_prompt)
             tsx_code = _extract_tsx_code(raw_code)
-            if "export const DynamicReel" not in tsx_code or "KineticWordCaption" not in tsx_code:
-                raise RuntimeError("Missing DynamicReel export or KineticWordCaption")
+            if "export const DynamicReel" not in tsx_code or "ChannelWatermark9x16" not in tsx_code:
+                raise RuntimeError("Missing DynamicReel export or ChannelWatermark9x16")
             dyn_path.write_text(tsx_code, encoding="utf-8")
-            proc = subprocess.run(["npx", "tsc", "--noEmit"], cwd=REMOTION_DIR, capture_output=True, text=True)
-            if proc.returncode == 0:
-                print(f"[AGENT-4 TSX] Custom DynamicReel.tsx compiled cleanly on attempt {attempt}!")
-                return "DynamicReel"
-            err_msg = (proc.stdout + "\n" + proc.stderr).strip()[:1500]
-            print(f"[AGENT-4 TSX] tsc failed (attempt {attempt}):\n{err_msg}")
-            current_prompt = (
-                f"File DynamicReel.tsx vừa viết bị lỗi TypeScript sau:\n{err_msg}\n\n"
-                f"Hãy sửa lại toàn bộ file DynamicReel.tsx cho hết lỗi `tsc --noEmit`. CHỈ trả về code TypeScript hoàn chỉnh:\n\n{tsx_code}"
+
+            # 1) TypeScript check
+            proc = subprocess.run(
+                ["npx", "tsc", "--noEmit"],
+                cwd=REMOTION_DIR,
+                capture_output=True,
+                text=True,
+                shell=(os.name == "nt"),
             )
+            if proc.returncode != 0:
+                err_msg = (proc.stdout + "\n" + proc.stderr).strip()[:1800]
+                print(f"[AGENT-4 TSX] tsc failed (attempt {attempt}):\n{err_msg}")
+                current_prompt = (
+                    f"File DynamicReel.tsx vừa viết bị lỗi TypeScript:\n{err_msg}\n\n"
+                    f"Hãy sửa lại toàn bộ file DynamicReel.tsx cho hết lỗi `tsc --noEmit`. CHỈ trả về code TypeScript hoàn chỉnh:\n\n{tsx_code}"
+                )
+                continue
+
+            # 2) Pre-render gate check
+            if inspect_composition is not None and gate_dir.exists():
+                gate_res = inspect_composition(dyn_path, gate_dir)
+                if not gate_res.get("passed", True):
+                    gate_issues = "\n".join(gate_res.get("issues", []))
+                    print(f"[AGENT-4 TSX] pre_render_gate failed (attempt {attempt}):\n{gate_issues}")
+                    current_prompt = (
+                        f"File DynamicReel.tsx vi phạm Pre-Render Gate:\n{gate_issues}\n\n"
+                        f"Hãy sửa lại toàn bộ file DynamicReel.tsx khắc phục triệt để các lỗi trên. CHỈ trả về code TypeScript hoàn chỉnh:\n\n{tsx_code}"
+                    )
+                    continue
+
+            # 3) Render 1 still per beat & inspect with Gemini Vision
+            still_paths: list[Path] = []
+            for idx, sc in enumerate(scenes[:6], start=1):
+                mid_sec = (float(sc.get("startSec", 0)) + float(sc.get("endSec", 2))) / 2.0
+                mid_frame = max(5, int(round(mid_sec * fps)))
+                sp = still_dir / f"beat_{idx:02d}.png"
+                try:
+                    subprocess.run(
+                        [
+                            "npx", "remotion", "still", "src/index.ts", "DynamicReel", str(sp),
+                            f"--frame={mid_frame}", "--gl=angle",
+                        ],
+                        cwd=REMOTION_DIR,
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        shell=(os.name == "nt"),
+                    )
+                    if sp.exists():
+                        still_paths.append(sp)
+                except Exception as exc:
+                    print(f"[STILL-QC] Could not capture beat {idx}: {exc}")
+
+            vision_err = _vision_inspect_beat_stills(still_paths)
+            if vision_err:
+                print(f"[STILL-QC] Vision rejected stills (attempt {attempt}): {vision_err}")
+                current_prompt = (
+                    f"Gemini Vision đã soi ảnh chụp từng Beat của DynamicReel.tsx và phát hiện lỗi bố cục sau:\n{vision_err}\n\n"
+                    f"Hãy sửa lại tọa độ/fontSize/căn lề trong DynamicReel.tsx để hết hoàn toàn lỗi trên. CHỈ trả về code TypeScript hoàn chỉnh:\n\n{tsx_code}"
+                )
+                continue
+
+            print(f"[AGENT-4 TSX] DynamicReel.tsx passed tsc + pre_render_gate + Vision Still QC on attempt {attempt}!")
+            return "DynamicReel"
         except Exception as exc:
             print(f"[AGENT-4 TSX] Attempt {attempt} error: {exc}")
 
-    # Restore safe wrapper if all 3 attempts failed
     if safe_backup:
         dyn_path.write_text(safe_backup, encoding="utf-8")
     print("[AGENT-4 TSX] Falling back to HaDaWhyUniversal9x16")
@@ -1360,6 +1665,7 @@ CHỈ trả về code TypeScript hoàn chỉnh cho `DynamicReel.tsx` (bắt đ�
 
 def mode_render() -> Path:
     plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
+    plan["fps"] = 60
     harvest_assets(plan, clean=False)
     plan = _agent_3_prune_missing_assets(plan)
     PLAN_PATH.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1367,15 +1673,23 @@ def mode_render() -> Path:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     raw_mp4 = OUT_DIR / f"{title}_raw.mp4"
     out_mp4 = OUT_DIR / f"{title}.mp4"
-    # Build TTS + sync scene_plan.json BEFORE rendering Remotion so captions/scenes match voice 100%
+
+    # Bước A: Build VieNeu TTS + words.json + choreography_blueprint.json + -14.0 LUFS mix
     audio_wav = build_audio_track(plan, OUT_DIR / "audio_tmp")
+
     try:
         avail_cpus = len(os.sched_getaffinity(0))
     except AttributeError:
         avail_cpus = os.cpu_count() or 2
     concurrency = str(max(1, min(4, avail_cpus)))
-    comp_id = _agent_4_tsx_director(plan) if os.getenv("DEEPSEEK_API_KEY", "").strip() else "CinematicReel"
-    print(f"[RENDER] Using Remotion composition: {comp_id}")
+
+    # Bước C & D: AI tự viết TSX + tsc + pre_render_gate + Vision Still QC
+    has_any_llm = any(
+        os.getenv(k, "").strip()
+        for k in ("GEMINI_API_KEY", "GH_MODELS_TOKEN", "OPENROUTER_API_KEY", "DEEPSEEK_API_KEY")
+    )
+    comp_id = _agent_4_tsx_director(plan) if has_any_llm else "CinematicReel"
+    print(f"[RENDER] Using Remotion composition: {comp_id} @ {plan.get('fps', 60)}fps")
     run_cmd(
         [
             "npx",
@@ -1392,36 +1706,56 @@ def mode_render() -> Path:
         ],
         cwd=REMOTION_DIR,
     )
+
+    # Bước E: Ghép âm thanh -14.0 LUFS + Tạo & Nhúng Thumbnail + Auto QC + Gửi Telegram
+    thumb_png, seo_caption = _agent_6_thumbnail_and_seo(plan)
+    merged_mp4 = OUT_DIR / f"{title}_merged.mp4"
     if audio_wav and audio_wav.exists():
         subprocess.run(
             [
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(raw_mp4),
-                "-i",
-                str(audio_wav),
-                "-c:v",
-                "copy",
-                "-c:a",
-                "aac",
-                "-b:a",
-                "192k",
-                "-movflags",
-                "+faststart",
-                "-shortest",
-                str(out_mp4),
+                "ffmpeg", "-y", "-i", str(raw_mp4), "-i", str(audio_wav),
+                "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+                "-movflags", "+faststart", "-shortest", str(merged_mp4),
             ],
             check=True,
         )
         raw_mp4.unlink(missing_ok=True)
     else:
-        raw_mp4.replace(out_mp4)
+        raw_mp4.replace(merged_mp4)
+
+    if thumb_png and thumb_png.exists():
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-i", str(merged_mp4), "-i", str(thumb_png),
+                    "-map", "0", "-map", "1", "-c", "copy", "-disposition:v:1", "attached_pic",
+                    str(out_mp4),
+                ],
+                check=True,
+            )
+            merged_mp4.unlink(missing_ok=True)
+        except Exception as exc:
+            print(f"[THUMB-EMBED] Warning: {exc}")
+            merged_mp4.replace(out_mp4)
+    else:
+        merged_mp4.replace(out_mp4)
+
     qc_summary = _agent_5_visual_qc(out_mp4)
+    try:
+        sys.path.insert(0, str(BASE_DIR / "engine"))
+        from auto_qc_fb_reels import AutoQCFBReels  # type: ignore
+        qc_res = AutoQCFBReels().inspect_video(out_mp4)
+        qc_summary = f"{qc_summary} | AutoQC={qc_res.get('score')}/100 ({'PASS' if qc_res.get('passed') else 'WARN'})"
+    except Exception as exc:
+        print(f"[AUTO-QC] Skipped deep OpenCV QC: {exc}")
+
     send_telegram_video(out_mp4, f"Render hoàn tất ({qc_summary}): {title}")
-    _agent_6_thumbnail_and_seo(plan)
+    if thumb_png and thumb_png.exists():
+        send_telegram_photo(thumb_png, seo_caption)
+    elif seo_caption:
+        send_telegram_message(seo_caption)
+
     print(f"[RENDER] Output MP4: {out_mp4}")
-    # Auto-clean temporary cloud_out directory after Telegram delivery (Zero-Junk)
     shutil.rmtree(OUT_DIR, ignore_errors=True)
     return out_mp4
 

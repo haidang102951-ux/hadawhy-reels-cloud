@@ -28,10 +28,10 @@ export const TimelineTrack3D: React.FC<TimelineTrack3DProps> = ({
   milestones,
   centerX = 540,
   columnOffset = 275,
-  startNodeY = 470,
-  nodeStepY = 360,
-  spineTop = 410,
-  spineMaxHeight = 1180,
+  startNodeY = 650,
+  nodeStepY = 340,
+  spineTop = 580,
+  spineMaxHeight = 1040,
   spineColors = ["#FFE600", "#FF3B47"],
 }) => {
   const frame = useCurrentFrame();

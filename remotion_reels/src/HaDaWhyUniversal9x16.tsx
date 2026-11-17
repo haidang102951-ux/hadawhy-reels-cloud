@@ -11,7 +11,7 @@ import {
 } from "remotion";
 import { HaDaWhyMistBackground } from "./components/HaDaWhyMistBackground";
 import { ChannelWatermark9x16 } from "./components/ChannelWatermark9x16";
-import { KineticWordCaption, CaptionPhrase } from "./components/KineticWordCaption";
+import { type CaptionPhrase } from "./components/KineticWordCaption";
 import {
   SAT_FRA_PARIS,
   SAT_FRA_PATH,
@@ -1358,7 +1358,7 @@ export const HaDaWhyUniversal9x16: React.FC<HaDaWhyUniversal9x16Props> = ({
         );
       })}
 
-      <KineticWordCaption phrases={plan.captions} placement="bottom" />
+      {/* Bottom karaoke captions disabled per Channel DNA: keep Y:520..1580 clean for 3D visual storytelling */}
     </AbsoluteFill>
   );
 };
