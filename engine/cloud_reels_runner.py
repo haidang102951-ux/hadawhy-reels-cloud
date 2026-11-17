@@ -564,7 +564,21 @@ def _call_gemini_json(prompt: str, require_scenes: bool = True) -> dict:
 
     last_err = None
 
-    # 1. OpenRouter free high-intelligence models (if OPENROUTER_API_KEY is set)
+    # 1. DeepSeek official API (ưu tiên số 1 nếu có DEEPSEEK_API_KEY — cực nhanh & ổn định)
+    deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+    if deepseek_key:
+        res = _call_openai_compat_json(
+            "https://api.deepseek.com/chat/completions",
+            deepseek_key,
+            "deepseek-chat",
+            prompt,
+            "DEEPSEEK",
+            require_scenes=require_scenes,
+        )
+        if res is not None:
+            return res
+
+    # 2. OpenRouter free high-intelligence models (if OPENROUTER_API_KEY is set)
     openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     if openrouter_key:
         for or_model in (
@@ -582,19 +596,6 @@ def _call_gemini_json(prompt: str, require_scenes: bool = True) -> dict:
             )
             if res is not None:
                 return res
-
-    # 2. DeepSeek official API (if DEEPSEEK_API_KEY is set)
-    deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    if deepseek_key:
-        res = _call_openai_compat_json(
-            "https://api.deepseek.com/chat/completions",
-            deepseek_key,
-            "deepseek-chat",
-            prompt,
-            "DEEPSEEK",
-        )
-        if res is not None:
-            return res
 
     # 3. Google Gemini API (fail-fast 45s timeout)
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
@@ -1398,8 +1399,27 @@ def _agent_6_thumbnail_and_seo(plan: dict) -> tuple[Path | None, str]:
 
 
 def _call_llm_text(prompt: str) -> str:
-    """Call Gemini (primary) / GitHub Models / OpenRouter / DeepSeek for raw TSX code generation."""
+    """Call DeepSeek (primary if key set) / Gemini / GitHub Models / OpenRouter for raw TSX code generation."""
     import requests  # type: ignore
+
+    deepseek_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+    if deepseek_key:
+        try:
+            print("[AGENT-4 TSX] Calling DeepSeek deepseek-chat...")
+            r = requests.post(
+                "https://api.deepseek.com/chat/completions",
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {deepseek_key}"},
+                json={"model": "deepseek-chat", "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 8192},
+                timeout=90,
+            )
+            if r.ok:
+                text = str(r.json()["choices"][0]["message"]["content"]).strip()
+                if "export const DynamicReel" in text:
+                    return text
+            else:
+                print(f"[AGENT-4 TSX] DeepSeek HTTP {r.status_code}: {r.text[:200]}")
+        except Exception as exc:
+            print(f"[AGENT-4 TSX] DeepSeek error: {exc}")
 
     gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
     if gemini_key:
@@ -1421,6 +1441,8 @@ def _call_llm_text(prompt: str) -> str:
                         text = str(cands[0]["content"]["parts"][0]["text"]).strip()
                         if "export const DynamicReel" in text:
                             return text
+                else:
+                    print(f"[AGENT-4 TSX] Gemini {model} HTTP {r.status_code}: {r.text[:200]}")
             except Exception as exc:
                 print(f"[AGENT-4 TSX] Gemini {model} error: {exc}")
 
@@ -1591,9 +1613,9 @@ CHỈ trả về code TypeScript hoàn chỉnh cho `DynamicReel.tsx` (bắt đ�
                 raise RuntimeError("Missing DynamicReel export or ChannelWatermark9x16")
             dyn_path.write_text(tsx_code, encoding="utf-8")
 
-            # 1) TypeScript check
+            # 1) TypeScript check (use explicit typescript package so npx never grabs wrong tsc@2.0.4)
             proc = subprocess.run(
-                ["npx", "tsc", "--noEmit"],
+                ["npx", "-p", "typescript", "tsc", "--noEmit"],
                 cwd=REMOTION_DIR,
                 capture_output=True,
                 text=True,
