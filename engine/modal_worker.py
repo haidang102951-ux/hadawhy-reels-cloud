@@ -203,14 +203,11 @@ def telegram_webhook(payload: dict) -> dict:
         if gemini_key:
             sys_prompt = (
                 "Bạn là cộng sự thân thiết (nói chuyện tự nhiên như bạn bè thân, xưng 'tôi/mình' gọi 'ông/bạn', ngắn gọn, thông minh, hài hước vừa phải, KHÔNG kiểu robot AI) "
-                "đang cùng vận hành kênh video ngắn HaDa Why (@hadawhy) chạy trên Modal GPU.\n"
+                "đang cùng vận hành kênh video ngắn HaDa Why (@hadawhy).\n"
                 f"{job_info}\n"
                 f"Lịch sử chat gần đây: {json.dumps(history[-8:], ensure_ascii=False)}\n"
                 f"Tin nhắn mới nhất từ bạn: {json.dumps(text, ensure_ascii=False)}\n\n"
-                "Hãy phân tích ý định và trả về ĐÚNG JSON:\n"
-                '{"action": "chat" | "auto" | "create" | "revise" | "render", "topic_or_feedback": "nội dung chủ đề/góp ý nếu action khác chat", "reply": "câu trả lời tự nhiên như bạn bè"}\n'
-                "- Nếu chỉ chào hỏi ('alo', 'ê'), hỏi thăm ('làm tới đâu rồi'), hoặc bàn ý tưởng chưa chốt làm -> action='chat', trả lời tự nhiên, KHÔNG chạy render.\n"
-                "- Chỉ khi người dùng ra lệnh hoặc chốt làm video (vd 'làm video về...', 'triển luôn đi', 'chạy đi') -> chọn action tương ứng ('auto'/'create'/'revise'/'render') và điền topic_or_feedback."
+                "Hãy trả lời tự nhiên như bạn bè (KHÔNG tự ý chạy làm video). Nếu bạn bàn xong chủ đề muốn làm, chỉ cần nhắc nhẹ: 'Chốt thì ông gõ /auto <chủ đề> để tôi bấm máy nhé!'."
             )
             for g_model in ("gemini-2.5-flash", "gemini-flash-latest"):
                 try:
@@ -218,27 +215,18 @@ def telegram_webhook(payload: dict) -> dict:
                         f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={gemini_key}",
                         json={
                             "contents": [{"parts": [{"text": sys_prompt}]}],
-                            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.6},
+                            "generationConfig": {"temperature": 0.65, "maxOutputTokens": 400},
                         },
                         timeout=15,
                     )
                     if r.ok:
-                        raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-                        parsed = json.loads(raw)
-                        act = str(parsed.get("action", "chat")).strip().lower()
-                        reply_text = str(parsed.get("reply", "")).strip()
-                        if act in ("auto", "create", "revise", "render"):
-                            mode = act
-                            feedback = str(parsed.get("topic_or_feedback") or text).strip()
-                        else:
-                            mode = "chat"
+                        reply_text = str(r.json()["candidates"][0]["content"]["parts"][0]["text"]).strip()
                         break
                 except Exception as exc:
                     print(f"[TG-CHAT] {g_model} error: {exc}")
 
-        if not mode:
-            mode = "chat"
-            reply_text = reply_text or "Nghe rõ rồi ông ơi! Cần tôi làm video chủ đề gì hay bàn ý tưởng cứ nhắn nhé."
+        mode = "chat"
+        reply_text = reply_text or "Nghe rõ rồi ông ơi! Cứ chém gió thoải mái, khi nào chốt làm video thì gõ `/auto <chủ đề>` nhé."
 
         try:
             history.append({"user": text, "bot": reply_text})
