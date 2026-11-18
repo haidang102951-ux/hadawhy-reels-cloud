@@ -1015,7 +1015,7 @@ def mode_preview() -> list[Path]:
                 "remotion",
                 "still",
                 "src/index.ts",
-                "HaDaWhyUniversal9x16",
+                "CinematicReel",
                 str(out_png),
                 f"--frame={frame_num}",
                 "--gl=angle",

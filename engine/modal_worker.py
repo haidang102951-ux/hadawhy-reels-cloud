@@ -37,6 +37,7 @@ image = (
         "libxrandr2",
         "libgbm1",
         "libasound2",
+        "libxshmfence1",
     )
     .run_commands(
         "curl -fsSL https://deb.nodesource.com/setup_20.x | bash -",
@@ -127,7 +128,7 @@ def run_pipeline_gpu(
     if proc.returncode != 0 and tg_token and tg_chat_id:
         import urllib.parse
         import urllib.request
-        err_tail = ((proc.stderr or "") + "\n" + (proc.stdout or "")).strip()[-1200:]
+        err_tail = ((proc.stderr or "").strip()[-1800:] or (proc.stdout or "").strip()[-1500:])
         data = urllib.parse.urlencode({"chat_id": tg_chat_id, "text": f"❌ Lỗi khi chạy mode={mode}:\n{err_tail}"[:4000]}).encode()
         try:
             urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{tg_token}/sendMessage", data=data), timeout=15).read()
@@ -246,9 +247,9 @@ def telegram_webhook(payload: dict) -> dict:
                 '{"action": "chat" | "auto" | "create" | "revise" | "render", "topic_or_feedback": "chủ đề/góp ý nếu action khác chat", "reply": "câu trả lời tự nhiên như bạn bè"}\n\n'
                 "QUY TẮC HÀNH ĐỘNG (CẤM HỨA MỒM):\n"
                 "- Chào hỏi ('alo'), hỏi thăm ('làm tới đâu rồi'), hỏi về hệ thống, góp ý/bàn ý tưởng chưa chốt ('đừng đem tiếng anh vào kịch bản') -> action='chat'.\n"
-                "- KHI NGƯỜI DÙNG CHỐT / RA LỆNH (kể cả câu ngắn dựa trên ngữ cảnh đang bàn như: 'làm đi', 'ok triển đi', 'chạy đi', 'viết kịch bản đi', 'làm video này đi'):\n"
-                "  + Nếu đang bàn viết kịch bản / yêu cầu viết kịch bản -> action='create', topic_or_feedback = TÓM TẮT ĐẦY ĐỦ CHỦ ĐỀ + MỌI YÊU CẦU ĐÃ THỐNG NHẤT TRONG LỊCH SỬ CHAT (ví dụ: thời lượng 40s, 100% tiếng Việt không chèn tiếng Anh, góc tiếp cận đã chốt).\n"
-                "  + Nếu yêu cầu làm luôn ra video -> action='auto', topic_or_feedback = TÓM TẮT ĐẦY ĐỦ CHỦ ĐỀ + MỌI YÊU CẦU ĐÃ THỐNG NHẤT.\n"
+                "- KHI NGƯỜI DÙNG CHỐT / RA LỆNH (kể cả câu ngắn dựa trên ngữ cảnh đang bàn như: 'làm đi', 'ok triển đi', 'chạy đi', 'làm video này đi'):\n"
+                "  + Mặc định đặt action='auto' (để làm trọn gói ra luôn Video 60fps + Thumbnail + SEO), topic_or_feedback = TÓM TẮT ĐẦY ĐỦ CHỦ ĐỀ + MỌI YÊU CẦU ĐÃ THỐNG NHẤT TRONG LỊCH SỬ CHAT (ví dụ: thời lượng 40s, 100% tiếng Việt không chèn tiếng Anh).\n"
+                "  + CHỈ đặt action='create' nếu người dùng nói rõ 'chỉ viết kịch bản trước' hoặc 'xem trước'.\n"
                 "  + Nếu yêu cầu sửa kịch bản vừa tạo -> action='revise'. Nếu duyệt render -> action='render'.\n"
                 "- TUYỆT ĐỐI CẤM HỨA MỒM: Nếu bạn chọn action='chat', KHÔNG BAO GIỜ được nói 'mình đang viết ngay / chút lát gửi ông' vì action='chat' KHÔNG chạy máy!"
             )
