@@ -205,57 +205,56 @@ def telegram_webhook(payload: dict) -> dict:
         motapi_key = os.getenv("MOTAPI_KEY", "").strip()
         if motapi_key:
             sys_prompt = (
-                "Bạn là cộng sự thân thiết (nói chuyện tự nhiên như bạn bè thân, xưng 'tôi/mình' gọi 'ông/bạn', ngắn gọn, thông minh, hài hước vừa phải, KHÔNG kiểu robot AI) "
-                "đang cùng vận hành kênh video ngắn HaDa Why (@hadawhy).\n"
+                "Bạn là cộng sự thân thiết (nói chuyện tự nhiên như bạn bè, xưng 'tôi/mình' gọi 'ông/bạn', ngắn gọn, thông minh, thẳng thắn, KHÔNG kiểu robot AI) "
+                "đang cùng vận hành hệ thống sản xuất video ngắn HaDa Why (@hadawhy).\n\n"
+                "THÔNG TIN THẬT VỀ HỆ THỐNG HIỆN TẠI (để trả lời chính xác khi bạn hỏi):\n"
+                "- Hạ tầng: Chạy trên Modal T4 GPU (scale-to-zero, không cần mở máy tính).\n"
+                "- Não AI: Dùng MotAPI (`claude-sonnet-4-6` viết code TSX 3D & soi bố cục, `gpt-5.6-sol` dự phòng) — đã bỏ Gemini free & OpenRouter.\n"
+                "- Giọng đọc: VieNeu-TTS giọng Hải Đăng.\n"
+                "- Hình ảnh & Tách nền: Google Images (Serper) + Wikipedia + tách nền GPU `bria-rmbg` + Vision kiểm tra.\n"
+                "- Nhạc & Âm thanh: ACE-Step 5-Beat Trailer độc bản + 43 file foley thật xoay vòng + chuẩn -14.0 LUFS.\n"
+                "- QC trước render: tsc --noEmit + pre_render_gate + OpenCV & Vision soi từng Beat still rồi mới render 1080x1920 @ 60fps + Thumbnail 9:16 + 3 tiêu đề SEO.\n"
                 f"{job_info}\n"
                 f"Lịch sử chat gần đây: {json.dumps(history[-8:], ensure_ascii=False)}\n"
                 f"Tin nhắn mới nhất từ bạn: {json.dumps(text, ensure_ascii=False)}\n\n"
-                "Hãy trả lời tự nhiên như bạn bè (KHÔNG tự ý chạy làm video). Nếu bạn bàn xong chủ đề muốn làm, chỉ cần nhắc nhẹ: 'Chốt thì ông gõ /auto <chủ đề> để tôi bấm máy nhé!'."
+                "Hãy trả lời ĐÚNG JSON (không markdown):\n"
+                '{"action": "chat" | "auto" | "create" | "revise" | "render", "topic_or_feedback": "chủ đề/góp ý nếu action khác chat", "reply": "câu trả lời tự nhiên như bạn bè"}\n\n'
+                "QUY TẮC KHÓA CHẶT (TUYỆT ĐỐI KHÔNG ĐOÁN MÒ):\n"
+                "- Mặc định 99% là action='chat': Chào hỏi ('alo'), hỏi thăm ('làm tới đâu rồi'), hỏi về hệ thống/công nghệ/chi phí, bàn ý tưởng chưa chốt -> BẮT BUỘC action='chat'.\n"
+                "- CHỈ khi bạn RA LỆNH RÕ RÀNG muốn sản xuất/chỉnh sửa video ngay (vd: 'làm cho tôi video về...', 'tạo video 20s về...', 'triển chủ đề này đi', 'render đi', 'sửa kịch bản thành...') thì mới đặt action='auto' / 'create' / 'revise' / 'render' và điền topic_or_feedback đầy đủ từ ngữ cảnh."
             )
             for m_model in ("claude-sonnet-4-6", "gpt-5.6-sol", "deepseek-v4.1-flash-1017"):
                 try:
                     r = requests.post(
                         "https://motapis.com/v1/chat/completions",
                         headers={"Authorization": f"Bearer {motapi_key}", "Content-Type": "application/json", "User-Agent": "HaDaWhyBot/1.0"},
-                        json={"model": m_model, "messages": [{"role": "user", "content": sys_prompt}], "temperature": 0.65, "max_tokens": 400},
-                        timeout=15,
+                        json={"model": m_model, "messages": [{"role": "user", "content": sys_prompt}], "temperature": 0.4, "max_tokens": 500},
+                        timeout=20,
                     )
                     if r.ok:
-                        cand = str((r.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
-                        if cand:
-                            reply_text = cand
+                        raw = str((r.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
+                        raw_clean = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                        s_idx, e_idx = raw_clean.find("{"), raw_clean.rfind("}")
+                        if s_idx != -1 and e_idx > s_idx:
+                            parsed = json.loads(raw_clean[s_idx:e_idx + 1])
+                            act = str(parsed.get("action", "chat")).strip().lower()
+                            reply_text = str(parsed.get("reply", "")).strip()
+                            if act in ("auto", "create", "revise", "render"):
+                                mode = act
+                                feedback = str(parsed.get("topic_or_feedback") or text).strip()
+                            else:
+                                mode = "chat"
+                            break
+                        elif raw:
+                            mode = "chat"
+                            reply_text = raw
                             break
                 except Exception as exc:
                     print(f"[TG-CHAT-MOTAPI] {m_model} error: {exc}")
 
-        gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
-        if not reply_text and gemini_key:
-            sys_prompt = (
-                "Bạn là cộng sự thân thiết (nói chuyện tự nhiên như bạn bè thân, xưng 'tôi/mình' gọi 'ông/bạn', ngắn gọn, thông minh, hài hước vừa phải, KHÔNG kiểu robot AI) "
-                "đang cùng vận hành kênh video ngắn HaDa Why (@hadawhy).\n"
-                f"{job_info}\n"
-                f"Lịch sử chat gần đây: {json.dumps(history[-8:], ensure_ascii=False)}\n"
-                f"Tin nhắn mới nhất từ bạn: {json.dumps(text, ensure_ascii=False)}\n\n"
-                "Hãy trả lời tự nhiên như bạn bè (KHÔNG tự ý chạy làm video). Nếu bạn bàn xong chủ đề muốn làm, chỉ cần nhắc nhẹ: 'Chốt thì ông gõ /auto <chủ đề> để tôi bấm máy nhé!'."
-            )
-            for g_model in ("gemini-2.5-flash", "gemini-flash-latest"):
-                try:
-                    r = requests.post(
-                        f"https://generativelanguage.googleapis.com/v1beta/models/{g_model}:generateContent?key={gemini_key}",
-                        json={
-                            "contents": [{"parts": [{"text": sys_prompt}]}],
-                            "generationConfig": {"temperature": 0.65, "maxOutputTokens": 400},
-                        },
-                        timeout=15,
-                    )
-                    if r.ok:
-                        reply_text = str(r.json()["candidates"][0]["content"]["parts"][0]["text"]).strip()
-                        break
-                except Exception as exc:
-                    print(f"[TG-CHAT] {g_model} error: {exc}")
-
-        mode = "chat"
-        reply_text = reply_text or "Nghe rõ rồi ông ơi! Cứ chém gió thoải mái, khi nào chốt làm video thì gõ `/auto <chủ đề>` nhé."
+        if not mode:
+            mode = "chat"
+        reply_text = reply_text or "Nghe rõ rồi ông ơi! Cứ hỏi hoặc bàn thoải mái, muốn làm video chủ đề gì cứ bảo thẳng tôi nhé."
 
         try:
             history.append({"user": text, "bot": reply_text})
