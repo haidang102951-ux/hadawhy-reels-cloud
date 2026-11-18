@@ -134,9 +134,9 @@ def _fetch_wikipedia_image(query: str) -> bytes | None:
 
 def _check_image_hd_and_sharp(
     raw_bytes: bytes,
-    min_w: int = 800,
-    min_h: int = 500,
-    min_sharpness: float = 45.0,
+    min_w: int = 900,
+    min_h: int = 600,
+    min_sharpness: float = 60.0,
 ) -> tuple[bool, int, int, float]:
     """Verify real decoded image dimensions and Laplacian sharpness to block blurry/pixelated photos."""
     from PIL import Image, ImageFilter, ImageStat  # type: ignore
@@ -1726,16 +1726,16 @@ def _agent_4_tsx_director(plan: dict) -> str:
     ]
 
     ref_snippet = ""
-    for ref_name in ("RapPhimBongNgo42s.tsx", "NvidiaSuccession40s.tsx"):
+    for ref_name in ("BiMatVeSo40s.tsx", "RapPhimBongNgo42s.tsx", "NvidiaSuccession40s.tsx"):
         ref_file = REMOTION_DIR / "src" / ref_name
         if ref_file.exists():
-            ref_snippet += f"\n--- MẪU THAM CHIẾU ({ref_name}) ---\n" + "\n".join(ref_file.read_text(encoding="utf-8").splitlines()[:85]) + "\n"
+            ref_snippet += f"\n--- MẪU THAM CHIẾU ({ref_name}) ---\n" + "\n".join(ref_file.read_text(encoding="utf-8").splitlines()[:65]) + "\n"
 
     tsx_prompt = f"""Bạn là Kỹ Sư Đạo Diễn Remotion 3D (`fb-reels-motion-3d-director`). Hãy viết MỘT FILE CODE `DynamicReel.tsx` ĐỘC BẢN cho video 9:16 (1080x1920, {fps} fps).
 
 CÁC COMPONENT CHUẨN CÓ SẴN & EXACT PROPS:
 - `import React from "react";`
-- `import {{ AbsoluteFill, Img, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig }} from "remotion";`
+- `import {{ AbsoluteFill, Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig }} from "remotion";`
 - `import {{ HaDaWhyMistBackground }} from "./components/HaDaWhyMistBackground";` // props: intensity?: number, accentHex?: string
 - `import {{ HaDaWhyFontFaces, KineticHookHeader }} from "./components/KineticHookHeader";` // KineticHookHeader props: beat={{start:number, eyebrow:string, hero:string, accent:string, heroSize?:number}}, top?:number
 - `import {{ ChannelWatermark9x16 }} from "./components/ChannelWatermark9x16";` // no required props
@@ -1744,15 +1744,16 @@ CÁC COMPONENT CHUẨN CÓ SẴN & EXACT PROPS:
 - `import {{ GeoStrategicMap3D }} from "./components/GeoStrategicMap3D";` // props: startFrame, endFrame, originLabel, targetLabel, evidenceImageSrc?, evidenceTitle?
 - `import {{ StickerPop }} from "./components/StickerPop";`
 - `import {{ CoinStream }} from "./components/CoinStream";`
+- `import {{ WhipPanTransition, ZoomThroughTransition, SplitCurtainWipe, Tilt3DFlip, MarkerHighlightText, StaggerWaveText, GlitchSplitText, MetallicSweepText, OdometerCounter, ParallaxDepthStage, DotMatrixZoom, FlowPipeline3D, DecisionBranchPulse }} from "./components/fx";`
 - `import defaultPlan from "./scene_plan.json";`
 - `import {{ UniversalScenePlan }} from "./HaDaWhyUniversal9x16";`
 
 YÊU CẦU KỸ THUẬT BẮT BUỘC:
 1. Export đúng: `export const DynamicReel: React.FC<{{ plan?: UniversalScenePlan }}> = ({{ plan = defaultPlan as unknown as UniversalScenePlan }}) => {{ ... }};`
-2. **TUYỆT ĐỐI CẤM DÙNG `<Sequence>`!** (vì `<Sequence>` reset `useCurrentFrame()` về 0 làm hỏng `startFrame` của `KineticHookHeader`/`ScaleComparison3D`/`TimelineTrack3D`/`GeoStrategicMap3D`). Bắt buộc dùng `const frame = useCurrentFrame();` toàn cục và hiển thị từng Beat bằng điều kiện `{{frame >= fromFrame && frame < endFrame && (...)}}` giống hệt mẫu `RapPhimBongNgo42s.tsx`!
+2. **TUYỆT ĐỐI CẤM DÙNG `<Sequence>`!** (vì `<Sequence>` reset `useCurrentFrame()` về 0 làm hỏng `startFrame` của `KineticHookHeader`/`ScaleComparison3D`/`TimelineTrack3D`/`GeoStrategicMap3D`). Bắt buộc dùng `const frame = useCurrentFrame();` toàn cục và hiển thị từng Beat bằng điều kiện `{{frame >= fromFrame && frame < endFrame && (...)}}` giống hệt mẫu `BiMatVeSo40s.tsx` & `RapPhimBongNgo42s.tsx`!
 3. BẮT BUỘC render `<HaDaWhyFontFaces />` và `<HaDaWhyMistBackground intensity={0.11} accentHex="66, 178, 242" />` ở lớp nền, và `<ChannelWatermark9x16 />` ở lớp trên cùng!
 4. BẮT BUỘC dùng `<KineticHookHeader beat={{...}} top={{280}} />` cho tiêu đề tầng trên (`maxWidth: 900`), ZERO-BOX (tuyệt đối CẤM `backgroundColor: "rgba(...,0.4..0.9)"` bọc chữ; chỉ dùng `WebkitTextStroke` + `textShadow`).
-5. Tầng giữa (`top: 520..1580px`): Phối hợp chuyển động đa lớp liên tục cho ảnh thật (`{json.dumps(harvested_list)}`), mọi ảnh BẮT BUỘC có chuyển động Ken Burns / Parallax / Scale suốt `durationFrames`, sử dụng `ScaleComparison3D` / `TimelineTrack3D` / `GeoStrategicMap3D` / số đếm Odometer / sơ đồ SVG tùy ngữ cảnh từng Beat.
+5. **BẮT BUỘC DÙNG >= 2 PRIMITIVE 3D/SVG/FX ĐỘC BẢN** (`ScaleComparison3D`, `TimelineTrack3D`, `GeoStrategicMap3D`, `CoinStream`, `FlowPipeline3D`, `OdometerCounter`, `WhipPanTransition`, `ZoomThroughTransition`, `<svg>`): Cấm làm slideshow chỉ có `<Img>` lặp lại! Tầng giữa (`top: 520..1580px`) phối hợp chuyển động đa lớp cho ảnh thật (`{json.dumps(harvested_list)}`).
 6. **KHÔNG ĐƯỢC ĐỨNG IM Ở CUỐI VIDEO:** Toàn bộ các Beat phải nối tiếp kín 100% từ frame `0` đến hết tổng `durationFrames` (`{sum(b["durationFrames"] for b in scenes_brief)}` frames).
 7. CẤM tuyệt đối `objects/*_3d.png` (icon nhựa hoạt hình) và CẤM phụ đề karaoke đáy màn hình.
 {ref_snippet}
