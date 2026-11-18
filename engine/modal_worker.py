@@ -18,6 +18,11 @@ app = modal.App("hadawhy-reels-gpu")
 CACHE_VOL = modal.Volume.from_name("hadawhy-models-cache", create_if_missing=True)
 TG_STATE = modal.Dict.from_name("hadawhy-tg-memory", create_if_missing=True)
 
+chat_image = modal.Image.debian_slim(python_version="3.11").pip_install(
+    "fastapi[standard]",
+    "requests",
+)
+
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install(
@@ -156,11 +161,12 @@ def run_pipeline_gpu(
 
 
 @app.function(
-    image=image,
+    image=chat_image,
     secrets=[modal.Secret.from_name("hadawhy-secrets")],
     cpu=0.5,
-    memory=512,
+    memory=256,
     timeout=30,
+    scaledown_window=300,
 )
 @modal.fastapi_endpoint(method="POST")
 def telegram_webhook(payload: dict) -> dict:
@@ -275,13 +281,13 @@ def telegram_webhook(payload: dict) -> dict:
             for m_key in motapi_keys:
                 if reply_text:
                     break
-                for m_model in ("claude-sonnet-4-6", "gpt-5.6-sol", "deepseek-v4.1-flash-1017"):
+                for m_model in ("deepseek-v4.1-flash-1017", "gpt-5.6-sol", "claude-sonnet-4-6"):
                     try:
                         r = requests.post(
                             "https://motapis.com/v1/chat/completions",
                             headers={"Authorization": f"Bearer {m_key}", "Content-Type": "application/json", "User-Agent": "HaDaWhyBot/1.0"},
                             json={"model": m_model, "messages": [{"role": "user", "content": sys_prompt}], "temperature": 0.4, "max_tokens": 500},
-                            timeout=20,
+                            timeout=12,
                         )
                         if r.ok:
                             raw = str((r.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
