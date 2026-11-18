@@ -38,9 +38,29 @@ def inspect_composition(tsx_path: Path, project_dir: Path) -> dict:
     if "KineticHookHeader" not in code and "hookSpring" not in code:
         issues.append("MISSING KINETIC TEXT HOOK: Must use <KineticHookHeader /> or dynamic spring slam (1.38 -> 1.0) on hooks.")
 
-    # 1b. Plastic cartoon emoji ban
-    if re.search(r'objects/[a-z0-9_]+_3d\.png', code, re.IGNORECASE):
-        issues.append("BANNED PLASTIC EMOJI: Found *_3d.png cartoon icon reference. Use real harvested photos or 3D components.")
+    # 1b. Total ban on ALL plastic cartoon emoji, objects/*.png, demo_archive, and repetitive StickerPop
+    if re.search(r'["\'\`/]objects/[a-z0-9_.\-]+', code, re.IGNORECASE):
+        issues.append("BANNED PLASTIC ICON: Found reference to objects/* icon. All cartoon/plastic icons are permanently banned. Use real HD photos, custom cutouts, or programmed data graphics.")
+    if re.search(r'["\'\`/]demo_archive/[a-z0-9_.\-]+', code, re.IGNORECASE):
+        issues.append("BANNED ARCHIVE ASSET: Found reference to deleted demo_archive/* folder.")
+    if "StickerPop" in code:
+        issues.append("BANNED LEGACY EFFECT: StickerPop (pop-and-shake) is banned. Use CapCutTransitions + KineticTextFX + KnowledgeMotionFX from ./components/fx.")
+    objects_dir = tsx_path.parent.parent / "public" / "objects"
+    if objects_dir.exists():
+        issues.append(f"BANNED FOLDER EXISTS: {objects_dir} must remain deleted so plastic icons cannot be reused.")
+
+    fx_primitives = (
+        "WhipPanTransition", "ZoomThroughTransition", "SplitCurtainWipe", "Tilt3DFlip",
+        "MarkerHighlightText", "StaggerWaveText", "GlitchSplitText", "MetallicSweepText",
+        "OdometerCounter", "ParallaxDepthStage", "DotMatrixZoom", "FlowPipeline3D",
+        "DecisionBranchPulse", "Real3DPhotoStage", "DataBars3D", "MotionTrackedCallout",
+    )
+    fx_used = sum(1 for name in fx_primitives if name in code)
+    if fx_used < 2:
+        issues.append(
+            f"LOW FX DIVERSITY: Found only {fx_used} modern FX primitive(s) from ./components/fx. "
+            "Must combine at least 2 dynamic transition/text/knowledge FX (CapCutTransitions, KineticTextFX, KnowledgeMotionFX)."
+        )
 
     # 2. Zero-Box check: detect ANY dark card boxes wrapping text (background or backgroundColor rgba)
     box_pattern = re.compile(
@@ -154,6 +174,23 @@ def inspect_composition(tsx_path: Path, project_dir: Path) -> dict:
             f"COOKIE-CUTTER LAYOUT DETECTED: Found {img_count} <Img> blocks with only {dynamic_3d_primitives} 3D/SVG motion primitive(s). "
             "Every beat must vary physical motion metaphors instead of repeating plain image cards."
         )
+
+    # Luật Tiến Hóa & Độc Bản: so với toàn bộ tập cũ trong novelty_progress_ledger.json
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from novelty_progress_ledger import check as novelty_check
+        nv = novelty_check(tsx_path, project_dir)
+        issues.extend(nv.get("issues", []))
+    except Exception as exc:
+        issues.append(f"NOVELTY LEDGER ERROR: không chạy được kiểm tra độc bản ({exc}). Cấm render khi chưa kiểm tra.")
+
+    # Chấm điểm sức giữ chân trước render
+    try:
+        from retention_density_scorer import score as retention_score
+        rt = retention_score(tsx_path, project_dir)
+        issues.extend(rt.get("issues", []))
+    except Exception as exc:
+        issues.append(f"RETENTION SCORER ERROR: ({exc}). Cấm render khi chưa chấm giữ chân.")
 
     return {
         "passed": len(issues) == 0,

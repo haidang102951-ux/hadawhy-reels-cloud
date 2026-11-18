@@ -6,6 +6,7 @@ import { NvidiaSuccession40s } from "./NvidiaSuccession40s";
 import { Friday13Origins45s } from "./Friday13Origins45s";
 import { RapPhimBongNgo42s } from "./RapPhimBongNgo42s";
 import { VanHoaNhauViaHe40s } from "./VanHoaNhauViaHe40s";
+import { BiMatVeSo40s } from "./BiMatVeSo40s";
 import { HaDaWhyUniversal9x16, UniversalScenePlan } from "./HaDaWhyUniversal9x16";
 import { DynamicReel } from "./DynamicReel";
 import { CinematicReel } from "./CinematicReel";
@@ -60,6 +61,14 @@ export const Root: React.FC = () => {
         id="VanHoaNhauViaHe40s"
         component={VanHoaNhauViaHe40s}
         durationInFrames={1800}
+        fps={60}
+        width={1080}
+        height={1920}
+      />
+      <Composition
+        id="BiMatVeSo40s"
+        component={BiMatVeSo40s}
+        durationInFrames={2373}
         fps={60}
         width={1080}
         height={1920}

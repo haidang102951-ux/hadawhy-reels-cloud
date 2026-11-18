@@ -8,7 +8,8 @@
     "cd78e9320b200b15b908464465d24a8bb7c9b88c4a75f94de257dd8a42e18734",
     "5282cbd2da75e0ec06fe525a2ed476d9e059deaece22101aeb3e1a8a07b6ca90",
     "5da98b8507364f0ba81be96c645644fb75e6d4fbb1cffcdf6fcbed81d9c9c384",
-    "61052f8374c96ea289028acfe203687f8b646a13e795f58d8e4a740e6b5e4ed7"
+    "61052f8374c96ea289028acfe203687f8b646a13e795f58d8e4a740e6b5e4ed7",
+    "eb3b826685e8bd434fad2feef1385931846b11b032209972babd4f18356004bb"
   ],
   "used_recipes": [
     "forensic_finance_st-2_tm1.156_s0.0_18.0_53.2_42.0_14.0",
@@ -19,12 +20,14 @@
     "conspiracy_thriller_st2_tm1.216_s0.0_27.6_52.3_38.0_13.0",
     "tech_monopoly_st-2_tm1.24_s0.0_23.6_58.6_34.0_13.5",
     "conspiracy_thriller_st0_tm1.156_s0.8_20.4_51.4_42.8_14.0",
-    "conspiracy_thriller_st-3_tm1.24_s0.8_21.2_46.9_42.8_12.5"
+    "conspiracy_thriller_st-3_tm1.24_s0.8_21.2_46.9_42.8_12.5",
+    "consumer_trap_st-2_tm1.18_s0.4_22.8_58.6_38.0_14.0"
   ],
   "used_tracks": [
-    "epic_victory_climax_01.mp3",
     "epic_victory_climax_02.mp3",
+    "dark_investigation_mystery_02.mp3",
+    "epic_victory_climax_01.mp3",
     "dark_investigation_tension_01.mp3",
-    "dark_investigation_mystery_02.mp3"
+    "wallstreet_finance_momentum_03.mp3"
   ]
 }

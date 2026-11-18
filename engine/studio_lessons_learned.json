@@ -26,5 +26,24 @@
     "4. 5-ACT MOVIE TRAILER BGM + SPECTRAL POCKET: Nhạc nền phải có cấu trúc 5 Hồi Trailer Phim (Riser + Braaam + Staccato Strings + Crescendo + Vacuum Drop 0.65s + Impact), cắt rãnh -5dB tại 2.2-2.8kHz + Sidechain Ducking.",
     "5. VOICE-FIRST AUDIO HIERARCHY: Giọng đọc Hải Đăng luôn ở ngôi thượng tầng; cả BGM lẫn SFX tuyệt đối không được lớn hơn hoặc át giọng đọc (SFX chỉ điểm ở điểm chuyển Hook/khe nghỉ, cắt gọn đuôi không đè chữ).",
     "6. ANTI-HARSHNESS WARM CINEMA MASTERING: Không nghe chói tai/khó chịu: hãm nhẹ dải gắt 4kHz-7kHz trên các SFX kim loại/glitch và giọng đọc (tránh boost 3.5kHz quá tay), khóa True Peak <= -1.5 dBTP, âm thanh ấm, dày, không méo rè."
+  ],
+  "script_6beat_universal_doctrine": [
+    "CẤU TRÚC 6 NHỊP CẢM XÚC BẮT BUỘC CHO MỌI KỊCH BẢN: [1. HOOK] -> [2. GÀI TÂM LÝ] -> [3. GIẢI MÃ] -> [4. ĐẢO CHIỀU] -> [5. CAO TRÀO] -> [6. KÍCH THÍCH BÌNH LUẬN].",
+    "VĂN PHONG TỰ NHIÊN ĐỒNG CẢM + KIẾN THỨC VỪA ĐỦ: Không nhồi nhét bảng thống kê khô cứng, tập trung vào 1 mạch tâm lý/kiến thức xuyên suốt chạm đúng đời sống người xem.",
+    "LUẬT THÊM THẮT KHỚP GIÂY TỪNG Ô (CẤM KÉO GIÃN BẰNG IM LẶNG): Khi đặt mục tiêu N giây (vd 40s), phải viết đủ ý tự nhiên cho từng ô thời gian để giọng đọc chạy liền mạch, chỉ nghỉ 0.3s-0.4s giữa các nhịp và 0.6s Vacuum Drop trước câu chốt."
+  ],
+  "evolution_lessons": [
+    {
+      "date": "2026-11-17T23:35:37",
+      "lesson": "LUAT TIEN HOA & DOC BAN",
+      "root_cause": "BiMatVeSo40s scored 23.0 vs Nvidia 39.4 and best 47.8; reused brain cutout from VanHoaNhau; StickerPop pop-shake reused every episode; objects/ plastic icons; SFX guessed from words.json.",
+      "enforcement": [
+        "novelty_progress_ledger.py wired into pre_render_gate.py",
+        "objects/ demo_archive/ deleted",
+        "StickerPop banned",
+        "src/components/fx library",
+        "SFX from tsx frames + no consecutive repeats"
+      ]
+    }
   ]
 }

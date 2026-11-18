@@ -184,6 +184,60 @@ def auto_choreograph_script_sfx_cues(
     return cues, vacuum_drops
 
 
+def deduplicate_consecutive_sfx(sfx_cues: list[tuple[str, int, float]]) -> list[tuple[str, int, float]]:
+    """
+    Chống lặp lại cùng 1 hiệu ứng SFX liên tiếp: nếu 2 cue kề nhau dùng cùng 1 file,
+    tự động xoay vòng sang biến thể khác cùng nhóm vật lý.
+    """
+    variant_groups = [
+        ["pop.mp3", "pop_dry.mp3", "tap.mp3", "type_soft.mp3"],
+        ["whoosh1.mp3", "whoosh2.mp3", "whoosh3.mp3", "whoosh_big.mp3"],
+        ["bass_hit.mp3", "hit_blow.mp3", "metal_hit.mp3", "zoom_hit.mp3"],
+        ["tick.mp3", "gear_lock.mp3", "lock.mp3", "cut.mp3"],
+    ]
+    sorted_cues = sorted(sfx_cues, key=lambda x: x[1])
+    out: list[tuple] = []
+    prev_name: Optional[str] = None
+    for cue in sorted_cues:
+        fname, start_ms, vol = cue[0], cue[1], cue[2]
+        rest = cue[3:]
+        chosen = fname
+        if prev_name is not None and chosen == prev_name:
+            for grp in variant_groups:
+                if chosen in grp:
+                    idx = grp.index(chosen)
+                    for offset in range(1, len(grp)):
+                        cand = grp[(idx + offset) % len(grp)]
+                        if (SFX_DIR / cand).exists():
+                            chosen = cand
+                            break
+                    break
+        out.append((chosen, start_ms, vol, *rest))
+        prev_name = chosen
+    return out
+
+
+def extract_tsx_sfx_cues(tsx_path: str | Path, fps: int = 60) -> list[tuple[str, int, float]]:
+    """
+    Đọc trực tiếp các mốc frame thật (lockFrame, impactFrames, beat start) từ file .tsx
+    để âm thanh nổ đúng frame chữ/số đang chạy, tuyệt đối không trễ.
+    """
+    import re
+    code = Path(tsx_path).read_text(encoding="utf-8")
+    cues: list[tuple[str, int, float]] = []
+    lock_frames = [int(m) for m in re.findall(r"lockFrame\s*:\s*(\d+)", code)]
+    digit_pool = ["tick.mp3", "gear_lock.mp3", "pop_dry.mp3", "tap.mp3", "lock.mp3", "metal_hit.mp3"]
+    for i, fr in enumerate(lock_frames):
+        cues.append((digit_pool[i % len(digit_pool)], round(fr * 1000 / fps), 0.72))
+    impact_match = re.search(r"impactFrames\s*=\s*\[([^\]]+)\]", code)
+    if impact_match:
+        impacts = [int(x.strip()) for x in impact_match.group(1).split(",") if x.strip().isdigit()]
+        imp_pool = ["bass_hit.mp3", "zoom_hit.mp3", "hit_blow.mp3", "metal_hit.mp3"]
+        for i, fr in enumerate(impacts):
+            cues.append((imp_pool[i % len(imp_pool)], round(fr * 1000 / fps), 0.65))
+    return deduplicate_consecutive_sfx(cues)
+
+
 def validate_fresh_ai_bgm(bgm_path: Path) -> None:
     bgm_str = str(bgm_path.resolve()).lower()
     forbidden_markers = [
@@ -265,8 +319,11 @@ def mix_reels_master_audio(
 
     validate_fresh_ai_bgm(bgm_path)
 
+    sfx_cues = deduplicate_consecutive_sfx(sfx_cues)
+
     cmd = ["ffmpeg", "-y", "-i", str(voice_wav), "-i", str(bgm_path)]
-    for fname, _, _ in sfx_cues:
+    for cue in sfx_cues:
+        fname = cue[0]
         fpath = SFX_DIR / fname
         if not fpath.exists():
             raise FileNotFoundError(f"SFX không tồn tại trong kho phòng thu: {fpath}")
@@ -316,15 +373,38 @@ def mix_reels_master_audio(
         f"[bgm_vac][vo_sc]sidechaincompress=threshold=0.02:ratio=3.5:attack=45:release=280[bgm_final]"
     )
 
-    filter_parts = [vo_filter, vo_split, bgm_proc_filter, bgm_vac_filter, bgm_final_filter]
-    mix_inputs = ["[vo_mix]", "[bgm_final]"]
+    # 2b. Lớp âm nền theo bối cảnh (Contextual Ambience Bed - siêu nhẹ tạo chiều sâu không gian thật)
+    topic_low = (script_topic + " " + script_text).lower()
+    if any(k in topic_low for k in ("mưa", "bão", "sét", "đêm", "storm")):
+        amb_filter = f"anoisesrc=d={total_duration_sec:.2f}:c=pink:r=48000:a=0.012,highpass=f=180,lowpass=f=2400,aformat=channel_layouts=mono,haas[amb_bed]"
+    elif any(k in topic_low for k in ("phố", "vỉa hè", "chợ", "vé số", "đám đông", "quán")):
+        amb_filter = f"anoisesrc=d={total_duration_sec:.2f}:c=brown:r=48000:a=0.014,highpass=f=120,lowpass=f=1600,aformat=channel_layouts=mono,haas[amb_bed]"
+    else:
+        amb_filter = f"anoisesrc=d={total_duration_sec:.2f}:c=brown:r=48000:a=0.009,highpass=f=90,lowpass=f=900,aformat=channel_layouts=mono,haas[amb_bed]"
 
-    # 3. Nạp các điểm rơi SFX sắc nét + Anti-Harshness EQ (hãm dải chói 5.2kHz)
-    for idx, (_, delay_ms, vol) in enumerate(sfx_cues):
+    filter_parts = [vo_filter, vo_split, bgm_proc_filter, bgm_vac_filter, bgm_final_filter, amb_filter,
+                    "[vo_mix]aformat=channel_layouts=stereo[vo_st]",
+                    "[bgm_final]aformat=channel_layouts=stereo[bgm_st]"]
+    mix_inputs = ["[vo_st]", "[bgm_st]", "[amb_bed]"]
+
+    # 3. Nạp các điểm rơi SFX sắc nét + Anti-Harshness EQ (hãm 5.2kHz) + Stereo Panning theo vị trí
+    spatial_cycle = [-0.42, 0.42, -0.25, 0.25, 0.0]
+    for idx, cue in enumerate(sfx_cues):
+        fname, delay_ms, vol = cue[0], cue[1], cue[2]
+        if len(cue) >= 4:
+            pan_val = float(cue[3])
+        elif any(c in fname for c in ("bass_hit", "metal_hit", "hit_blow")):
+            pan_val = 0.0
+        else:
+            pan_val = spatial_cycle[idx % len(spatial_cycle)]
+        gain_l = round(min(1.0, 1.0 - max(0.0, pan_val)), 3)
+        gain_r = round(min(1.0, 1.0 + min(0.0, pan_val)), 3)
         inp_idx = idx + 2
         tag = f"[s{idx}]"
         filter_parts.append(
-            f"[{inp_idx}:a]equalizer=f=5200:width_type=q:width=1.2:g=-3.0,"
+            f"[{inp_idx}:a]aformat=channel_layouts=stereo,"
+            f"equalizer=f=5200:width_type=q:width=1.2:g=-3.0,"
+            f"pan=stereo|c0={gain_l}*c0|c1={gain_r}*c1,"
             f"adelay={int(delay_ms)}|{int(delay_ms)},volume={vol}{tag}"
         )
         mix_inputs.append(tag)

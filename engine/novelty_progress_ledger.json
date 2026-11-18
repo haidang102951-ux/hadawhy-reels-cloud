@@ -1,0 +1,189 @@
+{
+  "episodes": [
+    {
+      "episode_id": "Friday13Origins45s",
+      "composition": "Friday13Origins45s",
+      "registered_at": "2026-11-17T23:34:51",
+      "asset_hashes": {},
+      "colors": [
+        "#070403",
+        "#080403",
+        "#08090F",
+        "#090504",
+        "#090507",
+        "#0B0605",
+        "#120608",
+        "#1C130E",
+        "#D8C9B6",
+        "#E6D5B8",
+        "#F7F1E5",
+        "#FF3B47",
+        "#FFE600"
+      ],
+      "fx_set": [
+        "KineticWordCaption"
+      ],
+      "fx_order": [
+        "KineticWordCaption"
+      ],
+      "knowledge_layers": 8,
+      "hook_texts": [],
+      "sequences": 0,
+      "distinct_sfx": 0,
+      "progress_score": 38.4
+    },
+    {
+      "episode_id": "NvidiaSuccession40s",
+      "composition": "NvidiaSuccession40s",
+      "registered_at": "2026-11-17T23:34:51",
+      "asset_hashes": {},
+      "colors": [
+        "#00E5FF",
+        "#030710",
+        "#05070C",
+        "#0B1628",
+        "#0D070C",
+        "#0F172A",
+        "#2A121C",
+        "#475569",
+        "#76B900",
+        "#94A3B8",
+        "#CBD5E1",
+        "#E2E8F0",
+        "#FF3B47",
+        "#FFE600"
+      ],
+      "fx_set": [
+        "GeoStrategicMap3D",
+        "KineticWordCaption",
+        "RealPersonSpotlight3D",
+        "TimelineTrack3D"
+      ],
+      "fx_order": [
+        "KineticWordCaption",
+        "RealPersonSpotlight3D",
+        "GeoStrategicMap3D",
+        "TimelineTrack3D"
+      ],
+      "knowledge_layers": 6,
+      "hook_texts": [
+        "CEO NVIDIA",
+        "HỒ SƠ: ALICE HUANG - SINGAPORE",
+        "IPO NASDAQ",
+        "THÀNH LẬP NVIDIA"
+      ],
+      "sequences": 0,
+      "distinct_sfx": 0,
+      "progress_score": 39.4
+    },
+    {
+      "episode_id": "RapPhimBongNgo42s",
+      "composition": "RapPhimBongNgo42s",
+      "registered_at": "2026-11-17T23:34:51",
+      "asset_hashes": {},
+      "colors": [
+        "#04070D",
+        "#05070C",
+        "#0B111E",
+        "#42B2F2",
+        "#FF3B47",
+        "#FF9900",
+        "#FFE600"
+      ],
+      "fx_set": [
+        "AnatomyCallout3D",
+        "CoinStream",
+        "RealPersonSpotlight3D",
+        "ScaleComparison3D"
+      ],
+      "fx_order": [
+        "CoinStream",
+        "AnatomyCallout3D",
+        "ScaleComparison3D",
+        "CoinStream",
+        "RealPersonSpotlight3D"
+      ],
+      "knowledge_layers": 5,
+      "hook_texts": [
+        "DẦU & BƠ",
+        "GẤP >20 LẦN",
+        "HỘP GIẤY",
+        "LÃI 85%",
+        "NGÔ HẠT",
+        "SIÊU LỢI NHUẬN"
+      ],
+      "sequences": 0,
+      "distinct_sfx": 0,
+      "progress_score": 34.6
+    },
+    {
+      "episode_id": "van_hoa_nhau_vn",
+      "composition": "VanHoaNhauViaHe40s",
+      "registered_at": "2026-11-17T23:34:51",
+      "asset_hashes": {
+        "harvested/brain_neural_cutout_hd.png": "9a504fea68aa206ceac2a26430a4dce668be7b30"
+      },
+      "colors": [
+        "#04070D",
+        "#05070C",
+        "#334155",
+        "#34D399",
+        "#42B2F2",
+        "#475569",
+        "#64748B",
+        "#94A3B8",
+        "#CBD5E1",
+        "#D97706",
+        "#E2E8F0",
+        "#FBBF24",
+        "#FF3B47",
+        "#FFE600"
+      ],
+      "fx_set": [
+        "KineticHookHeader"
+      ],
+      "fx_order": [
+        "KineticHookHeader"
+      ],
+      "knowledge_layers": 11,
+      "hook_texts": [],
+      "sequences": 0,
+      "distinct_sfx": 0,
+      "progress_score": 47.8
+    },
+    {
+      "episode_id": "bi_mat_ve_so_vn",
+      "composition": "BiMatVeSo40s",
+      "registered_at": "2026-11-17T23:34:51",
+      "asset_hashes": {
+        "harvested/brain_neural_cutout_hd.png": "9a504fea68aa206ceac2a26430a4dce668be7b30",
+        "harvested/lightning_storm_real.jpg": "30dfea150c75410e53ec3f06e42fe9850a25df9a",
+        "harvested/ve_so_cutout_hd.png": "f664c62648487180748dbdf3655aa2bfa16c8106",
+        "harvested/vn_lottery_crowd_afternoon.jpg": "f29d160f1ddbc22297c601956c8d80803d141150",
+        "harvested/vn_lottery_seller_real.jpg": "0a8c6d7816d7074ebb0e6bc9a7439cacc59c5c1a"
+      },
+      "colors": [
+        "#00FF88",
+        "#040811",
+        "#05070C",
+        "#42B2F2",
+        "#FF2E4C",
+        "#FF3B47",
+        "#FFE600"
+      ],
+      "fx_set": [
+        "CoinStream",
+        "KineticHookHeader"
+      ],
+      "fx_order": [
+        "KineticHookHeader",
+        "CoinStream"
+      ],
+      "knowledge_layers": 4,
+      "hook_texts": [],
+      "sequences": 0,
+      "distinct_sfx": 0,
+      "progress_score": 23.0
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "samples": [
+    {
+      "video_name": "Đế chế Nvidia.mp4",
+      "tag": "benchmark_nvidia",
+      "analyzed_at": "2026-11-18T21:06:20",
+      "duration_sec": 42.87,
+      "fps": 60.0,
+      "total_cuts": 3,
+      "avg_cut_interval_sec": 10.72,
+      "first_3s_cuts": 2,
+      "mean_motion_energy": 3.97,
+      "peak_motion_energy": 82.39,
+      "mean_contrast": 42.69,
+      "recommended_rules": {
+        "target_cut_interval_sec": 1.5,
+        "min_first_3s_events": 2,
+        "min_motion_energy": 4.5
+      }
+    }
+  ],
+  "techniques": [
+    {
+      "id": "exploded_isometric_3d",
+      "use_for": "cost_breakdown"
+    },
+    {
+      "id": "split_screen_counter_race",
+      "use_for": "economic_comparison"
+    },
+    {
+      "id": "spotlight_xray_mask",
+      "use_for": "marketing_reveal"
+    },
+    {
+      "id": "domino_chain_3d",
+      "use_for": "causal_chain"
+    },
+    {
+      "id": "live_receipt_roll",
+      "use_for": "daily_expense"
+    }
+  ]
+}

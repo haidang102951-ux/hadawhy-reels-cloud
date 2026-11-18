@@ -68,9 +68,8 @@ export interface ThumbnailCover9x16Props {
 
 function fitEditorialSize(text: string, baseSize: number, minSize: number): number {
   const len = text.trim().length;
-  if (len <= 20) return baseSize;
-  if (len <= 23) return Math.round(baseSize * 0.94);
-  return Math.max(minSize, Math.round(baseSize * (20.5 / len)));
+  if (len <= 18) return baseSize;
+  return Math.max(minSize, Math.round(baseSize * (18.2 / len)));
 }
 
 export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
