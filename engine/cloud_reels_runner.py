@@ -230,6 +230,21 @@ _STOCK_WATERMARK_DOMAINS = (
 )
 
 
+_MOTAPI_RR_IDX = 0
+
+
+def _get_motapi_keys() -> list[str]:
+    """Return rotated list of MotAPI keys from comma-separated MOTAPI_KEY."""
+    global _MOTAPI_RR_IDX
+    raw = os.getenv("MOTAPI_KEY", "").strip()
+    keys = [k.strip() for k in raw.split(",") if k.strip()]
+    if len(keys) > 1:
+        start = _MOTAPI_RR_IDX % len(keys)
+        _MOTAPI_RR_IDX += 1
+        return keys[start:] + keys[:start]
+    return keys
+
+
 def _call_gemini_vision(prompt: str, images_bytes: list[bytes], max_tokens: int = 256) -> str | None:
     """Call MotAPI Vision (primary) or Gemini Vision API with JPEG thumbnails."""
     if not images_bytes:
@@ -247,25 +262,26 @@ def _call_gemini_vision(prompt: str, images_bytes: list[bytes], max_tokens: int 
             thumb.save(buf, "JPEG", quality=82)
             b64_list.append(base64.b64encode(buf.getvalue()).decode("ascii"))
 
-    motapi_key = os.getenv("MOTAPI_KEY", "").strip()
-    if motapi_key:
+    motapi_keys = _get_motapi_keys()
+    if motapi_keys:
         content: list[dict] = [{"type": "text", "text": prompt}]
         for b64 in b64_list:
             content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
-        for m_model in ("claude-sonnet-4-6", "gpt-5.6-sol"):
-            try:
-                r = requests.post(
-                    "https://motapis.com/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {motapi_key}", "Content-Type": "application/json", "User-Agent": "HaDaWhyBot/1.0"},
-                    json={"model": m_model, "messages": [{"role": "user", "content": content}], "max_tokens": max_tokens, "temperature": 0.1},
-                    timeout=35,
-                )
-                if r.ok:
-                    ans = str((r.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
-                    if ans:
-                        return ans
-            except Exception as exc:
-                print(f"[MOTAPI-VISION] {m_model} error: {exc}")
+        for m_key in motapi_keys:
+            for m_model in ("claude-sonnet-4-6", "gpt-5.6-sol"):
+                try:
+                    r = requests.post(
+                        "https://motapis.com/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {m_key}", "Content-Type": "application/json", "User-Agent": "HaDaWhyBot/1.0"},
+                        json={"model": m_model, "messages": [{"role": "user", "content": content}], "max_tokens": max_tokens, "temperature": 0.1},
+                        timeout=35,
+                    )
+                    if r.ok:
+                        ans = str((r.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
+                        if ans:
+                            return ans
+                except Exception as exc:
+                    print(f"[MOTAPI-VISION] {m_model} error: {exc}")
 
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
@@ -590,13 +606,12 @@ def _call_gemini_json(prompt: str, require_scenes: bool = True) -> dict:
 
     last_err = None
 
-    # 0. MotAPI Gateway (ưu tiên số 1 nếu có MOTAPI_KEY)
-    motapi_key = os.getenv("MOTAPI_KEY", "").strip()
-    if motapi_key:
+    # 0. MotAPI Gateway (ưu tiên số 1, xoay vòng tất cả key trong MOTAPI_KEY)
+    for m_key in _get_motapi_keys():
         for m_model in ("claude-sonnet-4-6", "gpt-5.6-sol", "deepseek-v4.1-flash-1017"):
             res = _call_openai_compat_json(
                 "https://motapis.com/v1/chat/completions",
-                motapi_key,
+                m_key,
                 m_model,
                 prompt,
                 f"MOTAPI/{m_model}",
@@ -1515,14 +1530,13 @@ def _call_llm_text(prompt: str) -> str:
     """Call MotAPI Claude/DeepSeek (primary) / DeepSeek / Gemini / GH Models / OpenRouter for raw TSX code."""
     import requests  # type: ignore
 
-    motapi_key = os.getenv("MOTAPI_KEY", "").strip()
-    if motapi_key:
+    for m_key in _get_motapi_keys():
         for m_model in ("claude-sonnet-4-6", "claude-sonnet-5", "deepseek-v4.1-flash-1017"):
             try:
                 print(f"[AGENT-4 TSX] Calling MotAPI {m_model}...")
                 r = requests.post(
                     "https://motapis.com/v1/chat/completions",
-                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {motapi_key}", "User-Agent": "HaDaWhyBot/1.0"},
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {m_key}", "User-Agent": "HaDaWhyBot/1.0"},
                     json={"model": m_model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 8192},
                     timeout=90,
                 )

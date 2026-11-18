@@ -227,8 +227,8 @@ def telegram_webhook(payload: dict) -> dict:
             elapsed = int(time.time() - float(last_job.get("ts", time.time())))
             job_info = f"Job gần nhất: mode={last_job.get('mode')}, topic='{last_job.get('topic')}', đã chạy được {elapsed} giây."
 
-        motapi_key = os.getenv("MOTAPI_KEY", "").strip()
-        if motapi_key:
+        motapi_keys = [k.strip() for k in os.getenv("MOTAPI_KEY", "").split(",") if k.strip()]
+        if motapi_keys:
             sys_prompt = (
                 "Bạn là cộng sự thân thiết (nói chuyện tự nhiên như bạn bè, xưng 'tôi/mình' gọi 'ông/bạn', ngắn gọn, thông minh, thẳng thắn, KHÔNG kiểu robot AI) "
                 "đang cùng vận hành hệ thống sản xuất video ngắn HaDa Why (@hadawhy).\n\n"
@@ -252,34 +252,37 @@ def telegram_webhook(payload: dict) -> dict:
                 "  + Nếu yêu cầu sửa kịch bản vừa tạo -> action='revise'. Nếu duyệt render -> action='render'.\n"
                 "- TUYỆT ĐỐI CẤM HỨA MỒM: Nếu bạn chọn action='chat', KHÔNG BAO GIỜ được nói 'mình đang viết ngay / chút lát gửi ông' vì action='chat' KHÔNG chạy máy!"
             )
-            for m_model in ("claude-sonnet-4-6", "gpt-5.6-sol", "deepseek-v4.1-flash-1017"):
-                try:
-                    r = requests.post(
-                        "https://motapis.com/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {motapi_key}", "Content-Type": "application/json", "User-Agent": "HaDaWhyBot/1.0"},
-                        json={"model": m_model, "messages": [{"role": "user", "content": sys_prompt}], "temperature": 0.4, "max_tokens": 500},
-                        timeout=20,
-                    )
-                    if r.ok:
-                        raw = str((r.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
-                        raw_clean = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-                        s_idx, e_idx = raw_clean.find("{"), raw_clean.rfind("}")
-                        if s_idx != -1 and e_idx > s_idx:
-                            parsed = json.loads(raw_clean[s_idx:e_idx + 1])
-                            act = str(parsed.get("action", "chat")).strip().lower()
-                            reply_text = str(parsed.get("reply", "")).strip()
-                            if act in ("auto", "create", "revise", "render"):
-                                mode = act
-                                feedback = str(parsed.get("topic_or_feedback") or text).strip()
-                            else:
+            for m_key in motapi_keys:
+                if reply_text:
+                    break
+                for m_model in ("claude-sonnet-4-6", "gpt-5.6-sol", "deepseek-v4.1-flash-1017"):
+                    try:
+                        r = requests.post(
+                            "https://motapis.com/v1/chat/completions",
+                            headers={"Authorization": f"Bearer {m_key}", "Content-Type": "application/json", "User-Agent": "HaDaWhyBot/1.0"},
+                            json={"model": m_model, "messages": [{"role": "user", "content": sys_prompt}], "temperature": 0.4, "max_tokens": 500},
+                            timeout=20,
+                        )
+                        if r.ok:
+                            raw = str((r.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
+                            raw_clean = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                            s_idx, e_idx = raw_clean.find("{"), raw_clean.rfind("}")
+                            if s_idx != -1 and e_idx > s_idx:
+                                parsed = json.loads(raw_clean[s_idx:e_idx + 1])
+                                act = str(parsed.get("action", "chat")).strip().lower()
+                                reply_text = str(parsed.get("reply", "")).strip()
+                                if act in ("auto", "create", "revise", "render"):
+                                    mode = act
+                                    feedback = str(parsed.get("topic_or_feedback") or text).strip()
+                                else:
+                                    mode = "chat"
+                                break
+                            elif raw:
                                 mode = "chat"
-                            break
-                        elif raw:
-                            mode = "chat"
-                            reply_text = raw
-                            break
-                except Exception as exc:
-                    print(f"[TG-CHAT-MOTAPI] {m_model} error: {exc}")
+                                reply_text = raw
+                                break
+                    except Exception as exc:
+                        print(f"[TG-CHAT-MOTAPI] {m_model} error: {exc}")
 
         if not mode:
             mode = "chat"
