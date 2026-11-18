@@ -202,8 +202,34 @@ def telegram_webhook(payload: dict) -> dict:
             elapsed = int(time.time() - float(last_job.get("ts", time.time())))
             job_info = f"Job gần nhất: mode={last_job.get('mode')}, topic='{last_job.get('topic')}', đã chạy được {elapsed} giây."
 
+        motapi_key = os.getenv("MOTAPI_KEY", "").strip()
+        if motapi_key:
+            sys_prompt = (
+                "Bạn là cộng sự thân thiết (nói chuyện tự nhiên như bạn bè thân, xưng 'tôi/mình' gọi 'ông/bạn', ngắn gọn, thông minh, hài hước vừa phải, KHÔNG kiểu robot AI) "
+                "đang cùng vận hành kênh video ngắn HaDa Why (@hadawhy).\n"
+                f"{job_info}\n"
+                f"Lịch sử chat gần đây: {json.dumps(history[-8:], ensure_ascii=False)}\n"
+                f"Tin nhắn mới nhất từ bạn: {json.dumps(text, ensure_ascii=False)}\n\n"
+                "Hãy trả lời tự nhiên như bạn bè (KHÔNG tự ý chạy làm video). Nếu bạn bàn xong chủ đề muốn làm, chỉ cần nhắc nhẹ: 'Chốt thì ông gõ /auto <chủ đề> để tôi bấm máy nhé!'."
+            )
+            for m_model in ("claude-sonnet-4-6", "gpt-5.6-sol", "deepseek-v4.1-flash-1017"):
+                try:
+                    r = requests.post(
+                        "https://motapis.com/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {motapi_key}", "Content-Type": "application/json", "User-Agent": "HaDaWhyBot/1.0"},
+                        json={"model": m_model, "messages": [{"role": "user", "content": sys_prompt}], "temperature": 0.65, "max_tokens": 400},
+                        timeout=15,
+                    )
+                    if r.ok:
+                        cand = str((r.json().get("choices") or [{}])[0].get("message", {}).get("content") or "").strip()
+                        if cand:
+                            reply_text = cand
+                            break
+                except Exception as exc:
+                    print(f"[TG-CHAT-MOTAPI] {m_model} error: {exc}")
+
         gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
-        if gemini_key:
+        if not reply_text and gemini_key:
             sys_prompt = (
                 "Bạn là cộng sự thân thiết (nói chuyện tự nhiên như bạn bè thân, xưng 'tôi/mình' gọi 'ông/bạn', ngắn gọn, thông minh, hài hước vừa phải, KHÔNG kiểu robot AI) "
                 "đang cùng vận hành kênh video ngắn HaDa Why (@hadawhy).\n"

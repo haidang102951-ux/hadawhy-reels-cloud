@@ -252,11 +252,11 @@ def _call_gemini_vision(prompt: str, images_bytes: list[bytes], max_tokens: int 
         content: list[dict] = [{"type": "text", "text": prompt}]
         for b64 in b64_list:
             content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
-        for m_model in ("gemini-4-hydrogen", "claude-sonnet-4-6"):
+        for m_model in ("claude-sonnet-4-6", "gpt-5.6-sol"):
             try:
                 r = requests.post(
                     "https://motapis.com/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {motapi_key}", "Content-Type": "application/json"},
+                    headers={"Authorization": f"Bearer {motapi_key}", "Content-Type": "application/json", "User-Agent": "HaDaWhyBot/1.0"},
                     json={"model": m_model, "messages": [{"role": "user", "content": content}], "max_tokens": max_tokens, "temperature": 0.1},
                     timeout=35,
                 )
@@ -554,7 +554,7 @@ def _extract_json_object(text: str) -> dict:
 def _call_openai_compat_json(url: str, api_key: str, model: str, prompt: str, label: str, require_scenes: bool = True) -> dict | None:
     import requests  # type: ignore
 
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}", "User-Agent": "HaDaWhyBot/1.0"}
     try:
         print(f"[{label}] Calling {model}...")
         payload: dict = {
@@ -593,7 +593,7 @@ def _call_gemini_json(prompt: str, require_scenes: bool = True) -> dict:
     # 0. MotAPI Gateway (ưu tiên số 1 nếu có MOTAPI_KEY)
     motapi_key = os.getenv("MOTAPI_KEY", "").strip()
     if motapi_key:
-        for m_model in ("deepseek-v4.1-flash-1017", "claude-sonnet-4-6"):
+        for m_model in ("claude-sonnet-4-6", "gpt-5.6-sol", "deepseek-v4.1-flash-1017"):
             res = _call_openai_compat_json(
                 "https://motapis.com/v1/chat/completions",
                 motapi_key,
@@ -1522,7 +1522,7 @@ def _call_llm_text(prompt: str) -> str:
                 print(f"[AGENT-4 TSX] Calling MotAPI {m_model}...")
                 r = requests.post(
                     "https://motapis.com/v1/chat/completions",
-                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {motapi_key}"},
+                    headers={"Content-Type": "application/json", "Authorization": f"Bearer {motapi_key}", "User-Agent": "HaDaWhyBot/1.0"},
                     json={"model": m_model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 8192},
                     timeout=90,
                 )
