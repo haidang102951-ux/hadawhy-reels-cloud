@@ -118,7 +118,21 @@ def run_pipeline_gpu(
         [sys.executable, "engine/cloud_reels_runner.py", "--mode", mode, "--feedback", feedback],
         cwd=repo_dir,
         env=env,
+        capture_output=True,
+        text=True,
     )
+    print(proc.stdout[-3000:] if proc.stdout else "")
+    if proc.stderr:
+        print(proc.stderr[-2000:])
+    if proc.returncode != 0 and tg_token and tg_chat_id:
+        import urllib.parse
+        import urllib.request
+        err_tail = ((proc.stderr or "") + "\n" + (proc.stdout or "")).strip()[-1200:]
+        data = urllib.parse.urlencode({"chat_id": tg_chat_id, "text": f"❌ Lỗi khi chạy mode={mode}:\n{err_tail}"[:4000]}).encode()
+        try:
+            urllib.request.urlopen(urllib.request.Request(f"https://api.telegram.org/bot{tg_token}/sendMessage", data=data), timeout=15).read()
+        except Exception:
+            pass
     CACHE_VOL.commit()
     return proc.returncode
 
@@ -137,10 +151,21 @@ def telegram_webhook(payload: dict) -> dict:
     import urllib.request
 
     msg = payload.get("message") or payload.get("edited_message") or {}
+    update_id = payload.get("update_id")
     chat_id = str((msg.get("chat") or {}).get("id") or "").strip()
     text = str(msg.get("text") or "").strip()
     if not chat_id or not text:
         return {"ok": True}
+
+    # Deduplicate Telegram webhook retries (Telegram resends same update_id if reply >5s)
+    if update_id is not None:
+        try:
+            dedup_key = f"upd_{update_id}"
+            if TG_STATE.get(dedup_key):
+                return {"ok": True, "dup": True}
+            TG_STATE[dedup_key] = True
+        except Exception:
+            pass
 
     allowed_chat = os.getenv("TELEGRAM_CHAT_ID", "").strip()
     tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
@@ -219,9 +244,13 @@ def telegram_webhook(payload: dict) -> dict:
                 f"Tin nhắn mới nhất từ bạn: {json.dumps(text, ensure_ascii=False)}\n\n"
                 "Hãy trả lời ĐÚNG JSON (không markdown):\n"
                 '{"action": "chat" | "auto" | "create" | "revise" | "render", "topic_or_feedback": "chủ đề/góp ý nếu action khác chat", "reply": "câu trả lời tự nhiên như bạn bè"}\n\n'
-                "QUY TẮC KHÓA CHẶT (TUYỆT ĐỐI KHÔNG ĐOÁN MÒ):\n"
-                "- Mặc định 99% là action='chat': Chào hỏi ('alo'), hỏi thăm ('làm tới đâu rồi'), hỏi về hệ thống/công nghệ/chi phí, bàn ý tưởng chưa chốt -> BẮT BUỘC action='chat'.\n"
-                "- CHỈ khi bạn RA LỆNH RÕ RÀNG muốn sản xuất/chỉnh sửa video ngay (vd: 'làm cho tôi video về...', 'tạo video 20s về...', 'triển chủ đề này đi', 'render đi', 'sửa kịch bản thành...') thì mới đặt action='auto' / 'create' / 'revise' / 'render' và điền topic_or_feedback đầy đủ từ ngữ cảnh."
+                "QUY TẮC HÀNH ĐỘNG (CẤM HỨA MỒM):\n"
+                "- Chào hỏi ('alo'), hỏi thăm ('làm tới đâu rồi'), hỏi về hệ thống, góp ý/bàn ý tưởng chưa chốt ('đừng đem tiếng anh vào kịch bản') -> action='chat'.\n"
+                "- KHI NGƯỜI DÙNG CHỐT / RA LỆNH (kể cả câu ngắn dựa trên ngữ cảnh đang bàn như: 'làm đi', 'ok triển đi', 'chạy đi', 'viết kịch bản đi', 'làm video này đi'):\n"
+                "  + Nếu đang bàn viết kịch bản / yêu cầu viết kịch bản -> action='create', topic_or_feedback = TÓM TẮT ĐẦY ĐỦ CHỦ ĐỀ + MỌI YÊU CẦU ĐÃ THỐNG NHẤT TRONG LỊCH SỬ CHAT (ví dụ: thời lượng 40s, 100% tiếng Việt không chèn tiếng Anh, góc tiếp cận đã chốt).\n"
+                "  + Nếu yêu cầu làm luôn ra video -> action='auto', topic_or_feedback = TÓM TẮT ĐẦY ĐỦ CHỦ ĐỀ + MỌI YÊU CẦU ĐÃ THỐNG NHẤT.\n"
+                "  + Nếu yêu cầu sửa kịch bản vừa tạo -> action='revise'. Nếu duyệt render -> action='render'.\n"
+                "- TUYỆT ĐỐI CẤM HỨA MỒM: Nếu bạn chọn action='chat', KHÔNG BAO GIỜ được nói 'mình đang viết ngay / chút lát gửi ông' vì action='chat' KHÔNG chạy máy!"
             )
             for m_model in ("claude-sonnet-4-6", "gpt-5.6-sol", "deepseek-v4.1-flash-1017"):
                 try:
