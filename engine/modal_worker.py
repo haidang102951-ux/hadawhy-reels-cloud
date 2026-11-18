@@ -125,6 +125,23 @@ def run_pipeline_gpu(
     print(proc.stdout[-3000:] if proc.stdout else "")
     if proc.stderr:
         print(proc.stderr[-2000:])
+    if proc.returncode == 0 and tg_chat_id:
+        try:
+            import json as _json
+            plan_file = os.path.join(repo_dir, "remotion_reels", "src", "scene_plan.json")
+            if os.path.exists(plan_file):
+                p_data = _json.loads(open(plan_file, encoding="utf-8").read())
+                summary = {
+                    "title": p_data.get("projectTitle"),
+                    "theme": p_data.get("theme"),
+                    "scenes": [
+                        {"id": s.get("id"), "layout": s.get("layout"), "heroText": s.get("heroText"), "narration": s.get("narration")}
+                        for s in p_data.get("scenes", [])
+                    ],
+                }
+                TG_STATE[f"script_{tg_chat_id}"] = summary
+        except Exception:
+            pass
     if proc.returncode != 0 and tg_token and tg_chat_id:
         import urllib.parse
         import urllib.request
@@ -217,9 +234,11 @@ def telegram_webhook(payload: dict) -> dict:
 
         history = []
         last_job = {}
+        last_script = {}
         try:
             history = TG_STATE.get(f"hist_{chat_id}", []) or []
             last_job = TG_STATE.get(f"job_{chat_id}", {}) or {}
+            last_script = TG_STATE.get(f"script_{chat_id}", {}) or {}
         except Exception:
             pass
 
@@ -227,21 +246,21 @@ def telegram_webhook(payload: dict) -> dict:
         if last_job:
             elapsed = int(time.time() - float(last_job.get("ts", time.time())))
             job_info = f"Job gần nhất: mode={last_job.get('mode')}, topic='{last_job.get('topic')}', đã chạy được {elapsed} giây."
+        script_info = f"\nKịch bản gần nhất đã tạo: {json.dumps(last_script, ensure_ascii=False)}" if last_script else ""
 
         motapi_keys = [k.strip() for k in os.getenv("MOTAPI_KEY", "").split(",") if k.strip()]
         if motapi_keys:
             sys_prompt = (
-                "Bạn là cộng sự thân thiết (nói chuyện tự nhiên như bạn bè, xưng 'tôi/mình' gọi 'ông/bạn', ngắn gọn, thông minh, thẳng thắn, KHÔNG kiểu robot AI) "
-                "đang cùng vận hành hệ thống sản xuất video ngắn HaDa Why (@hadawhy).\n\n"
-                "THÔNG TIN THẬT VỀ HỆ THỐNG HIỆN TẠI (để trả lời chính xác khi bạn hỏi):\n"
-                "- Hạ tầng: Chạy trên Modal T4 GPU (scale-to-zero, không cần mở máy tính).\n"
-                "- Não AI: Dùng MotAPI (`claude-sonnet-4-6` viết code TSX 3D & soi bố cục, `gpt-5.6-sol` dự phòng) — đã bỏ Gemini free & OpenRouter.\n"
-                "- Giọng đọc: VieNeu-TTS giọng Hải Đăng.\n"
-                "- Hình ảnh & Tách nền: Google Images (Serper) + Wikipedia + tách nền GPU `bria-rmbg` + Vision kiểm tra.\n"
-                "- Nhạc & Âm thanh: ACE-Step 5-Beat Trailer độc bản + 43 file foley thật xoay vòng + chuẩn -14.0 LUFS.\n"
-                "- QC trước render: tsc --noEmit + pre_render_gate + OpenCV & Vision soi từng Beat still rồi mới render 1080x1920 @ 60fps + Thumbnail 9:16 + 3 tiêu đề SEO.\n"
-                f"{job_info}\n"
-                f"Lịch sử chat gần đây: {json.dumps(history[-8:], ensure_ascii=False)}\n"
+                "Bạn là Đạo diễn / Cộng sự thân thiết (nói chuyện tự nhiên như bạn bè, xưng 'tôi/mình' gọi 'ông/bạn', ngắn gọn, thông minh, thẳng thắn, KHÔNG kiểu robot AI) "
+                "đang cùng vận hành kênh video ngắn HaDa Why (@hadawhy).\n\n"
+                "BỘ NÃO & LUẬT THÉP CỦA KÊNH HADA WHY (để tư duy, góp ý và trả lời đúng chuẩn):\n"
+                "- Định vị: Chuyên GÓC KHUẤT XÃ HỘI & BÍ ẨN BÊN TRONG SỰ VIỆC (chữ WHY), văn phong tự nhiên đồng cảm, không nhồi bảng thống kê khô cứng.\n"
+                "- Cấu trúc 6 Nhịp cảm xúc bắt buộc: [1. Hook nghịch lý] -> [2. Gài tâm lý] -> [3. Giải mã] -> [4. Đảo chiều] -> [5. Cao trào] -> [6. Kích thích bình luận].\n"
+                "- Kỹ thuật hình ảnh: Nền đen sâu + sương mù xanh #42B2F2, bố cục 2 tầng (Hook Slam tầng trên, 3D/tư liệu tầng giữa), cấm phụ đề karaoke đáy màn hình, cấm icon nhựa hoạt hình, ảnh HD >=900px + tách nền bria-rmbg GPU.\n"
+                "- Âm thanh & QC: Giọng VieNeu Hải Đăng thượng tầng + nhạc ACE 5-Beat Trailer độc bản + 43 foley xoay vòng (-14.0 LUFS), 60fps, AutoQC + OpenCV/Vision soi từng Beat still trước khi render.\n"
+                "- Hạ tầng: Modal T4 GPU + MotAPI (claude-sonnet-4-6 / gpt-5.6-sol, xoay vòng 2 key).\n"
+                f"{job_info}{script_info}\n"
+                f"Lịch sử chat gần đây: {json.dumps(history[-20:], ensure_ascii=False)}\n"
                 f"Tin nhắn mới nhất từ bạn: {json.dumps(text, ensure_ascii=False)}\n\n"
                 "Hãy trả lời ĐÚNG JSON (không markdown):\n"
                 '{"action": "chat" | "auto" | "create" | "revise" | "render", "topic_or_feedback": "chủ đề/góp ý nếu action khác chat", "reply": "câu trả lời tự nhiên như bạn bè"}\n\n'
@@ -291,7 +310,7 @@ def telegram_webhook(payload: dict) -> dict:
 
         try:
             history.append({"user": text, "bot": reply_text})
-            TG_STATE[f"hist_{chat_id}"] = history[-10:]
+            TG_STATE[f"hist_{chat_id}"] = history[-20:]
         except Exception:
             pass
 
