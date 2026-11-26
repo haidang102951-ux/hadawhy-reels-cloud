@@ -20,11 +20,9 @@ export interface ThumbnailCover9x16Props {
   heroSubjectSrc: string;
   /** Mystery secondary cutout PNG in public/ (rendered as dark rim-lit silhouette + "?") */
   mysteryOrSecondarySrc?: string;
-  /** Optional small top classification tag (empty string "" by default -> hidden) */
-  topBadgeText?: string;
-  /** Headline Line 1 (HaDa Blue #42B2F2 by default) */
+  /** Headline Line 1 (HaDa Bright Blue #22B8FF by default) */
   headlineLine1: string;
-  /** Headline Line 2 (WHY White #FFFFFF by default) */
+  /** Headline Line 2 (WHY Pure White #FFFFFF by default) */
   headlineLine2: string;
   /** Official channel logo PNG in public/ (strictly "brand/hadawhy_logo.png") */
   brandLogoSrc?: string;
@@ -73,26 +71,25 @@ function fitEditorialSize(text: string, baseSize: number, minSize: number): numb
 }
 
 export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
-  backgroundPhotoSrc = "harvested/nvidia_empire_real.png",
-  backgroundBlurPx = 0,
-  backgroundScale = 1.02,
+  backgroundPhotoSrc = "",
+  backgroundBlurPx = 3.5,
+  backgroundScale = 1.04,
   backgroundObjectPosition = "50% 50%",
-  backgroundBrightness = 0.82,
-  backgroundContrast = 1.18,
-  backgroundSaturate = 0.95,
+  backgroundBrightness = 0.65,
+  backgroundContrast = 1.15,
+  backgroundSaturate = 0.96,
   heroSubjectSrc,
   mysteryOrSecondarySrc,
-  topBadgeText = "",
   headlineLine1,
   headlineLine2,
   brandLogoSrc = "brand/hadawhy_logo.png",
   glowAccentColor = "#E11D2E",
-  headlineLine1Color = "#42B2F2",
+  headlineLine1Color = "#22B8FF",
   headlineLine2Color = "#FFFFFF",
-  heroBwHighContrast = true,
+  heroBwHighContrast = false,
   mysterySilhouetteMode = true,
   mysterySymbol = "?",
-  layoutMode = "mystery_silhouette",
+  layoutMode = "titan_evidence",
   forensicCircle,
   heroWidth,
   heroLeft,
@@ -101,26 +98,30 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
   secondaryTop = 815,
   secondaryLeft = 825,
   arrowPath = "M 555 620 Q 670 575 740 665",
-  topScrimOpacity = 0,
+  topScrimOpacity = 0.45,
 }) => {
   const isSilhouette = layoutMode === "mystery_silhouette" ? mysterySilhouetteMode : false;
-  const line1Size = fitEditorialSize(headlineLine1, 89, 56);
-  const line2Size = fitEditorialSize(headlineLine2, 86, 54);
-  const hasTopBadge = Boolean(topBadgeText && topBadgeText.trim().length > 0);
+  const line1Size = fitEditorialSize(headlineLine1, 86, 54);
+  const line2Size = fitEditorialSize(headlineLine2, 84, 52);
 
   return (
     <AbsoluteFill
       style={{
-        backgroundColor: "#090B10",
+        backgroundColor: "#06101E",
         overflow: "hidden",
       }}
     >
-      {/* Editorial Investigative Font: Kanit-Black */}
+      {/* Khóa 100% font tiếng Việt đầy đủ dấu BeVietnamPro-Black */}
       <style>
         {`
           @font-face {
+            font-family: 'BeVietnamProBlack';
+            src: url('${staticFile("fonts/BeVietnamPro-Black.ttf")}') format('truetype');
+            font-weight: 900;
+          }
+          @font-face {
             font-family: 'KanitBlack';
-            src: url('${staticFile("fonts/Kanit-Black.ttf")}') format('truetype');
+            src: url('${staticFile("fonts/BeVietnamPro-Black.ttf")}') format('truetype');
             font-weight: 900;
           }
         `}
@@ -181,63 +182,35 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
       </div>
 
       {/* ===================================================================
-          3. EDITORIAL HEADLINE BLOCK INSIDE 4:5 SAFE ZONE (top: 390)
+          3. DUY NHẤT 2 DÒNG TIÊU ĐỀ CHÍNH (#22B8FF + #FFFFFF) — CẤM TAG ĐỎ THỨ 3
          =================================================================== */}
-      {hasTopBadge && (
-        <div
-          style={{
-            position: "absolute",
-            left: 58,
-            top: 256,
-            padding: "5px 22px",
-            borderRadius: 7,
-            background: glowAccentColor,
-            border: "2px solid rgba(255, 255, 255, 0.45)",
-            boxShadow: `0 8px 22px rgba(0,0,0,0.65), 0 0 20px ${glowAccentColor}88`,
-          }}
-        >
-          <span
-            style={{
-              fontFamily: "KanitBlack, sans-serif",
-              fontSize: 27,
-              color: "#FFFFFF",
-              letterSpacing: "0.08em",
-              lineHeight: 1.1,
-              display: "block",
-            }}
-          >
-            {topBadgeText}
-          </span>
-        </div>
-      )}
-
-      {/* 2-Line HaDa Blue (#42B2F2) + WHY White (#FFFFFF) Stretched ~90% Width */}
       <div
         style={{
           position: "absolute",
           left: 540,
-          top: hasTopBadge ? 428 : 390,
+          top: 385,
           width: 970,
-          transform: "translate(-50%, -50%)",
+          transform: "translate3d(-50%, -50%, 0)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           textAlign: "center",
-          gap: 4,
+          gap: 8,
         }}
       >
         <div
           style={{
             width: "100%",
-            fontFamily: "KanitBlack, sans-serif",
+            fontFamily: "BeVietnamProBlack, sans-serif",
             fontSize: line1Size,
             fontWeight: 900,
-            lineHeight: 1.04,
+            lineHeight: 1.08,
             letterSpacing: "-0.015em",
             color: headlineLine1Color,
             WebkitTextStroke: "11px #05070C",
             paintOrder: "stroke fill",
-            textShadow: `0px 8px 0px #05070C, 0px 16px 32px rgba(0,0,0,0.95), 0px 0px 26px ${headlineLine1Color}66`,
+            textShadow: `0px 8px 0px #05070C, 0px 16px 32px rgba(0,0,0,0.95)`,
+            textTransform: "uppercase",
             whiteSpace: "nowrap",
           }}
         >
@@ -246,15 +219,16 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
         <div
           style={{
             width: "100%",
-            fontFamily: "KanitBlack, sans-serif",
+            fontFamily: "BeVietnamProBlack, sans-serif",
             fontSize: line2Size,
             fontWeight: 900,
-            lineHeight: 1.04,
+            lineHeight: 1.08,
             letterSpacing: "-0.015em",
             color: headlineLine2Color,
             WebkitTextStroke: "11px #05070C",
             paintOrder: "stroke fill",
-            textShadow: `0px 8px 0px #05070C, 0px 16px 32px rgba(0,0,0,0.95), 0px 0px 24px ${headlineLine2Color}55`,
+            textShadow: `0px 8px 0px #05070C, 0px 16px 32px rgba(0,0,0,0.95)`,
+            textTransform: "uppercase",
             whiteSpace: "nowrap",
           }}
         >
@@ -299,8 +273,8 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
                     ? "3px solid rgba(255, 255, 255, 0.25)"
                     : "none",
                 filter: isSilhouette
-                  ? `brightness(0) drop-shadow(0px 0px 5px ${glowAccentColor}) drop-shadow(0px 0px 24px ${glowAccentColor})`
-                  : `drop-shadow(0px 0px 8px ${glowAccentColor}) drop-shadow(0px 22px 34px rgba(0,0,0,0.9))`,
+                  ? `brightness(0) drop-shadow(0px 8px 16px rgba(0,0,0,0.85)) drop-shadow(0px 8px 16px rgba(0,0,0,0.85))`
+                  : `drop-shadow(0px 22px 34px rgba(0,0,0,0.9))`,
               }}
             />
           </div>
@@ -343,7 +317,7 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
                 stroke={glowAccentColor}
                 strokeWidth={8}
                 strokeDasharray="22 12"
-                style={{ filter: `drop-shadow(0 0 18px ${glowAccentColor})` }}
+                style={{ filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.85))" }}
               />
             )}
           </svg>
@@ -363,7 +337,7 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
                 color: glowAccentColor,
                 WebkitTextStroke: "8px #05070C",
                 paintOrder: "stroke fill",
-                textShadow: `0px 0px 42px ${glowAccentColor}, 0px 12px 28px rgba(0,0,0,0.95)`,
+                textShadow: `0 8px 18px rgba(0,0,0,0.85), 0px 12px 28px rgba(0,0,0,0.95)`,
                 pointerEvents: "none",
               }}
             >
@@ -393,8 +367,8 @@ export const ThumbnailCover9x16: React.FC<ThumbnailCover9x16Props> = ({
             height: "auto",
             display: "block",
             filter: heroBwHighContrast
-              ? `grayscale(100%) contrast(1.38) brightness(1.06) drop-shadow(0px 0px 10px ${glowAccentColor}CC) drop-shadow(0px 24px 38px rgba(0,0,0,0.95))`
-              : `drop-shadow(0px 0px 10px ${glowAccentColor}CC) drop-shadow(0px 24px 38px rgba(0,0,0,0.95))`,
+              ? `grayscale(100%) contrast(1.38) brightness(1.06) drop-shadow(0px 24px 38px rgba(0,0,0,0.95))`
+              : `drop-shadow(0px 24px 38px rgba(0,0,0,0.95))`,
           }}
         />
       </div>

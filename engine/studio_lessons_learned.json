@@ -1,48 +1,46 @@
 {
-  "version": "2026-11-16",
-  "channel_positioning": "HaDa WHY (@hadawhy) KHÔNG làm kênh tài chính thuần túy. Chuyên GÓC KHUẤT XÃ HỘI và BÍ ẨN BÊN TRONG SỰ VIỆC (chữ WHY) có từ khóa tìm kiếm thực tế cao trên Google/YouTube.",
+  "version": "2026-11-25",
+  "channel_positioning": "HaDa WHY (@hadawhy) chuyên phân tích GÓC KHUẤT XÃ HỘI, CƠ CHẾ VẬN HÀNH và BÍ ẨN BÊN TRONG SỰ VIỆC (chữ WHY) dựa trên dữ kiện thật, văn phong sắc bén, trung tính.",
   "mandatory_channel_dna": {
-    "backdrop": "<HaDaWhyMistBackground intensity={0.11} accentHex=\"66, 178, 242\" /> (Nền đen sâu Obsidian + sương mù xanh thương hiệu #42B2F2 Mức 1 rất nhẹ. CẤM lưới ô vuông, CẤM tự đổi màu nền sang vàng/đỏ).",
-    "layout_2_layers": "Tầng trên (Y:220..520px) chữ Hook Slam 2 dòng nổi bật; Tầng giữa (Y:520..1580px) 100% cho minh họa 3D + tư liệu thật; CẤM phụ đề karaoke đáy màn hình (KineticWordCaption).",
-    "suspense_reveal": "Câu hỏi đặt vấn đề PHẢI giữ bí mật bằng bối cảnh + dấu ? phát sáng; CHỈ bung đáp án 3D khi lời thoại đọc đến câu trả lời.",
-    "image_quality_gate": "Mọi ảnh tải về bắt buộc >= 800x500px (hoặc >= 650x450px cho prop 3D) và Laplacian sharpness >= 45.0; tuyệt đối cấm ảnh mờ nhòe vỡ hạt.",
-    "real_video_broll": "Với kịch bản đời thật/sự kiện thật: ưu tiên cào VIDEO B-roll thật sắc nét (>=720p, sạch watermark/phụ đề, lưu public/harvested/*.mp4) đưa vào khung minh họa tầng giữa bằng <OffthreadVideo muted /> trên nền ADN #42B2F2 Mức 1 thay vì chỉ dùng ảnh tĩnh.",
-    "audio_sync_gate": "1 luồng nhạc nền liền mạch mượt (CẤM cắt nối 5 khúc rời rạc, CẤM tích tắc đồng hồ rền rĩ); SFX phải khớp đúng frame vật thể/Hook xuất hiện (±30ms, CẤM trễ +280ms); Vacuum Drop ramp mượt 120ms + Sidechain Ducking.",
-    "pre_render_and_qc": "Bắt buộc pass pre_render_gate.py -> soi npx remotion still từng Beat -> render full -> mux -> AutoQCFBReels >= 95/100 + nghe trực tiếp audio trước khi báo cáo."
+    "backdrop": "<HaDaWhyMistBackground /> (Nền xanh đêm #0D2342 -> #061224 -> #030812 + lưới 56px sạch). CẤM ContextBackdropLayer, FloorPlatform3D, StickerPop, karaoke, neon.",
+    "brand_watermark_3_layers": "<ChannelWatermark9x16 /> đặt dòng cuối ngay trước </AbsoluteFill> (zIndex: 9999): Lớp 1 logo góc trên trái (top: 105, left: 44), Lớp 2 logo chìm chống bản quyền vùng thấp (top: 1360, width: 280, opacity: 0.05), Lớp 3 thanh pill theo dõi nhỏ gọn ở 3s cuối (top: 1485).",
+    "minimal_text_density": "Mỗi khung hình tối đa 1 thông điệp chữ; nếu tầng giữa đã có bằng chứng/sơ đồ kèm số lớn thì ẩn KineticHookHeader. CẤM chép nguyên câu thoại lên màn hình; tối đa 12–15 từ hiển thị mỗi Beat; khóa 100% font BeVietnamProBlack (0 vỡ dấu).",
+    "writing_tone": "Văn phong tự nhiên, sắc bén, trung tính; CẤM từ sáo rỗng/kích động (bầy đàn, vạch trần, trần trụi, máu me, bạo lực, bòn rút, mổ xẻ, bóc trần...).",
+    "image_quality_gate": "Cào 6 ứng viên A..F (>= 700px) theo đúng asset_role (prop_3d | avatar_node | ev_card) + visual_reasoning; bật ImageDedupeRegistry(check_global_history=True) ghi engine/image_used_history.json chống lặp ảnh giữa các tập; ảnh hiển thị mặc định imageFit='contain' chống cắt đầu/mặt/chữ.",
+    "audio_music_spotting_gate": "Ưu tiên AI tự sinh BGM riêng cho từng kịch bản (ACEStepFBRunner, bgm_path=None, fade-in 0.03s ở Hook, chỉ fallback Mixkit khi Cloud AI lỗi) kết hợp Music Spotting (bgm_segments: hook + 2–4 đoạn tension/climax/twist, tắt nhạc ngoài phân đoạn ở video dài >= 75s). Mục tiêu 10–16 điểm rơi SFX thu thật (role_*, ưu tiên 100% SFX thật, bỏ ưu tiên proc_*.wav), hook_text tối đa 2 lớp (<= 1.05 / <= 0.75). Chuẩn hóa -14.0 LUFS.",
+    "pre_render_and_qc": "Bắt buộc pass engine/qc_gate.py tsx + npx tsc --noEmit -> render & hòa âm bằng engine/render_reel.py -> xem qc_grid_3x3.jpg + thumbnail_9x16.png + nghe đủ 3 file: bgm_only_check.mp3, sfx_only_check.mp3, master_audio_qc_preview.mp3."
   },
-  "continuous_improvement_protocol": "Sau mỗi video, mọi góp ý của Người Chỉ Huy phải được mã hóa thành check tự động trong pre_render_gate.py hoặc auto_qc_fb_reels.py để lỗi cũ không bao giờ tái diễn.",
-  "iron_upgrades_2026_11": [
-    "ZERO PLASTIC *_3d.png EMOJI ICONS: Đã xóa vĩnh viễn. Dùng 100% ảnh thật HD (>=900px, Laplacian>=60), ảnh tư liệu cổ đúng giai đoạn lịch sử, và cutout khử viền mịn.",
-    "LOCKED FONTS & KINETIC HOOK: Bắt buộc dùng <HaDaWhyFontFaces /> + <KineticHookHeader /> (KanitBlack / BeVietnamProBlack + Spring Slam 1.38->1.0 Zero-Box).",
-    "NO LONELY SINGLE PHOTOS: Mọi phân cảnh phải có bố cục đa lớp sinh động (ảnh phụ, cutout, đường nối nét đứt chuyển động, thẻ dẫn chứng) giống chuẩn Vietjet/Friday13/Nvidia.",
-    "CONTINUOUS RHYTHMIC VOICEOVER: Cấm chèn khoảng lặng chết > 1.0s để kéo dài video; nghỉ nhịp tự nhiên 0.35-0.45s, Vacuum Drop tối đa 0.65s.",
-    "FRAME-SYNCED SFX & -14.0 LUFS: Đặt SFX khớp chính xác từng điểm chuyển Hook theo words.json, bù gain SFX nhỏ, chuẩn hóa -14.0 LUFS.",
-    "MANDATORY PARALLEL SUB-AGENT DELEGATION: Tổng chỉ huy bắt buộc chia việc song song cho 5 sub-agents chuyên trách đã được huấn luyện chuẩn."
-  ],
-  "master_upgrade_5_pillars_2026_11": [
-    "1. CHOREOGRAPHY BLUEPRINT MANDATORY: Trước khi cào ảnh & code Remotion, Con Tổng + Biên Kịch bắt buộc lập `choreography_blueprint.json` định nghĩa ẩn dụ chuyển động vật lý riêng cho từng Beat (cấm 2 Beat liên tiếp lặp lại cùng khuôn khung ảnh chữ nhật bo góc).",
-    "2. BENCHMARK ESCALATION GATE: Mọi video mới phải lấy NvidiaSuccession40s / Friday13Origins45s / RapPhimBongNgo42s làm sàn chuẩn tối thiểu và có ít nhất 1 cơ chế diễn hoạt vượt trội hơn.",
-    "3. MATCH-CUT & EVIDENCE HIGHLIGHTS: Bắt buộc có thẻ dẫn chứng nguồn tô vàng (WHO, báo cáo, hồ sơ) cho các con số lớn và chuyển cảnh nối mạch Match-Cut giữa các Beat.",
-    "4. 5-ACT MOVIE TRAILER BGM + SPECTRAL POCKET: Nhạc nền phải có cấu trúc 5 Hồi Trailer Phim (Riser + Braaam + Staccato Strings + Crescendo + Vacuum Drop 0.65s + Impact), cắt rãnh -5dB tại 2.2-2.8kHz + Sidechain Ducking.",
-    "5. VOICE-FIRST AUDIO HIERARCHY: Giọng đọc Hải Đăng luôn ở ngôi thượng tầng; cả BGM lẫn SFX tuyệt đối không được lớn hơn hoặc át giọng đọc (SFX chỉ điểm ở điểm chuyển Hook/khe nghỉ, cắt gọn đuôi không đè chữ).",
-    "6. ANTI-HARSHNESS WARM CINEMA MASTERING: Không nghe chói tai/khó chịu: hãm nhẹ dải gắt 4kHz-7kHz trên các SFX kim loại/glitch và giọng đọc (tránh boost 3.5kHz quá tay), khóa True Peak <= -1.5 dBTP, âm thanh ấm, dày, không méo rè."
-  ],
-  "script_6beat_universal_doctrine": [
-    "CẤU TRÚC 6 NHỊP CẢM XÚC BẮT BUỘC CHO MỌI KỊCH BẢN: [1. HOOK] -> [2. GÀI TÂM LÝ] -> [3. GIẢI MÃ] -> [4. ĐẢO CHIỀU] -> [5. CAO TRÀO] -> [6. KÍCH THÍCH BÌNH LUẬN].",
-    "VĂN PHONG TỰ NHIÊN ĐỒNG CẢM + KIẾN THỨC VỪA ĐỦ: Không nhồi nhét bảng thống kê khô cứng, tập trung vào 1 mạch tâm lý/kiến thức xuyên suốt chạm đúng đời sống người xem.",
-    "LUẬT THÊM THẮT KHỚP GIÂY TỪNG Ô (CẤM KÉO GIÃN BẰNG IM LẶNG): Khi đặt mục tiêu N giây (vd 40s), phải viết đủ ý tự nhiên cho từng ô thời gian để giọng đọc chạy liền mạch, chỉ nghỉ 0.3s-0.4s giữa các nhịp và 0.6s Vacuum Drop trước câu chốt."
-  ],
+  "continuous_improvement_protocol": "Mọi bài học thực chiến phải được mã hóa thành kiểm tra tự động trong engine/qc_gate.py hoặc engine/render_reel.py và đồng bộ duy nhất với .agent/rules/00-hadawhy-core.md.",
   "evolution_lessons": [
     {
       "date": "2026-11-17T23:35:37",
       "lesson": "LUAT TIEN HOA & DOC BAN",
-      "root_cause": "BiMatVeSo40s scored 23.0 vs Nvidia 39.4 and best 47.8; reused brain cutout from VanHoaNhau; StickerPop pop-shake reused every episode; objects/ plastic icons; SFX guessed from words.json.",
+      "root_cause": "Tái sử dụng cutout cũ, StickerPop nhựa và SFX đoán mù từ words.json.",
       "enforcement": [
-        "novelty_progress_ledger.py wired into pre_render_gate.py",
-        "objects/ demo_archive/ deleted",
-        "StickerPop banned",
-        "src/components/fx library",
-        "SFX from tsx frames + no consecutive repeats"
+        "StickerPop bị cấm tuyệt đối",
+        "Thư viện remotion_reels/src/components/fx",
+        "SFX đồng bộ theo frame từ choreography_blueprint.json"
+      ]
+    },
+    {
+      "date": "2026-11-24T01:07:00",
+      "lesson": "CHONG CAO MU, CHONG NHAY COC RENDER & TOI UU TOKEN",
+      "root_cause": "Harvester cũ cào ảnh ẩn dụ trừu tượng; luật rải rác mâu thuẫn giữa nhiều file.",
+      "enforcement": [
+        "Nén luật lõi vào .agent/rules/00-hadawhy-core.md + .agent/workflows/san-xuat-reel.md (4 trạm có 3 điểm dừng)",
+        "Cào 6 ứng viên A..F kèm visual_reasoning & asset_role"
+      ]
+    },
+    {
+      "date": "2026-11-25T23:50:00",
+      "lesson": "AI BGM + MUSIC SPOTTING + 5 DO CHOI DOI THAT + GIAM CHU & WATERMARK 3 LOP",
+      "root_cause": "Cũ hay dùng BGM Mixkit trước thay vì AI tự sinh, nhồi SFX proc_*.wav và quá nhiều chữ, thiếu đồ chơi đời thật không giống AI.",
+      "enforcement": [
+        "render_reel.py luôn truyền bgm_path=None + beat_timestamps thực tế + bgm_segments cho Music Spotting",
+        "sfx_timeline_mixer.py ưu tiên 100% SFX thật role_*, giới hạn hook_text <= 2 lớp, ngưỡng QC SFX hạ còn >= 10",
+        "ChannelWatermark9x16.tsx nâng cấp 3 lớp (logo góc top:105, stealth top:1360 opacity:0.05, pill theo dõi top:1485)",
+        "Thêm 5 component đời thật: ForensicHighlighter, EvidenceStringBoard, XRayPeelReveal, RealLifeArtifact, BlueprintMechanism",
+        "Đồng bộ 100% font BeVietnamProBlack, nền lưới xanh <HaDaWhyMistBackground />, bỏ các mục mâu thuẫn cũ"
       ]
     }
   ]

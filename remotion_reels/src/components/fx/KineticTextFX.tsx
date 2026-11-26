@@ -28,21 +28,29 @@ export const MarkerHighlightText: React.FC<{
       style={{
         position: "relative",
         display: "inline-block",
-        padding: "4px 14px",
+        padding: "2px 12px",
+        margin: "0 8px",
+        lineHeight: 1.24,
+        verticalAlign: "middle",
+        whiteSpace: "nowrap",
         fontSize,
         fontFamily,
         fontWeight: 900,
         color: sweepPct > 45 ? textColor : "#FFFFFF",
-        letterSpacing: "-0.02em",
+        letterSpacing: "-0.01em",
       }}
     >
       <span
         style={{
           position: "absolute",
-          inset: 0,
+          left: 0,
+          right: 0,
+          top: "8%",
+          bottom: "8%",
           backgroundColor: highlightColor,
           transformOrigin: "left center",
-          transform: `scaleX(${sweepPct / 100})`,
+          transform: `scale3d(${sweepPct / 100}, 1, 1)`,
+          willChange: "transform",
           borderRadius: 6,
           zIndex: 0,
         }}
@@ -100,8 +108,9 @@ export const StaggerWaveText: React.FC<{
               display: "inline-block",
               opacity: op,
               transform: `translateY(${y}px) scale(${interpolate(p, [0, 1], [0.85, 1])})`,
-              WebkitTextStroke: "2px rgba(0,0,0,0.85)",
-              textShadow: "0 6px 18px rgba(0,0,0,0.9)",
+              WebkitTextStroke: "7px #05070C",
+              paintOrder: "stroke fill",
+              textShadow: "0 4px 20px rgba(0,0,0,0.9)",
             }}
           >
             {word}
@@ -242,8 +251,10 @@ export const OdometerCounter: React.FC<{
         fontWeight: 900,
         color,
         fontVariantNumeric: "tabular-nums",
-        WebkitTextStroke: "2px rgba(0,0,0,0.88)",
-        textShadow: "0 8px 24px rgba(0,0,0,0.92)",
+        whiteSpace: "nowrap",
+        WebkitTextStroke: "7px #05070C",
+        paintOrder: "stroke fill",
+        textShadow: "0 4px 20px rgba(0,0,0,0.9)",
       }}
     >
       {prefix}

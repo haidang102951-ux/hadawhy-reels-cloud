@@ -118,7 +118,7 @@ export const RealPersonSpotlight3D: React.FC<RealPersonSpotlight3DProps> = ({
             width: "100%",
             height: "auto",
             filter:
-              `drop-shadow(0px 0px 6px ${rimGlowColor}) drop-shadow(0px 26px 40px rgba(0,0,0,0.92))`,
+              `drop-shadow(0px 8px 16px rgba(0,0,0,0.85)) drop-shadow(0px 26px 40px rgba(0,0,0,0.92))`,
           }}
         />
       </div>
@@ -168,7 +168,7 @@ export const RealPersonSpotlight3D: React.FC<RealPersonSpotlight3DProps> = ({
                 color: keyMetricAccentColor,
                 WebkitTextStroke: "11px #05070C",
                 paintOrder: "stroke fill",
-                textShadow: `0 0 32px ${keyMetricAccentColor}88`,
+                textShadow: "0 10px 24px rgba(0,0,0,0.95)",
                 marginTop: 4,
               }}
             >

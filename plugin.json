@@ -1,11 +1,11 @@
 {
   "name": "masterbrain-fb-reels-9x16",
   "displayName": "MasterBrain FB Reels 9:16 Studio",
-  "version": "1.0.0",
-  "description": "Đội ngũ 5 Sub-Agents tinh nhuệ (Cấm đẻ con rác) chuyên trách sản xuất Video Ngắn FB Reels / TikTok 9:16 (60fps): Biên kịch chuyên sâu 5 nhịp -> Trinh sát tư liệu thật & 3D theo đúng kịch bản -> Dựng Remotion 3D 60fps Zero-Box 80/20 -> Hòa âm -14.0 LUFS & Soi Mắt Thần.",
+  "version": "2.0.0",
+  "description": "Quy trình 4 Trạm sản xuất Video Ngắn FB Reels 9:16 @ 60fps chuẩn HaDa Why (có 3 Điểm Dừng phê duyệt): Trạm 1 Cào bài gốc + Kịch bản 5 nhịp + Giọng Hải Đăng -> Trạm 2 Trinh sát 6 ứng viên A..F & Tách nền 3D -> Trạm 3 Dựng Remotion 60fps (đồ chơi đời thật & 2.5D/3D, giảm chữ tối đa) -> Trạm 4 Thumbnail ADN + AI BGM Music Spotting + SFX thật Peak-0ms -14.0 LUFS.",
   "suggestedPrompts": [
-    "Sản xuất video ngắn FB Reels 9:16 chuẩn 60fps từ chủ đề mới",
-    "Lên kịch bản chuyên sâu 5 nhịp giữ chân & đi trinh sát tư liệu thật",
-    "Dựng Remotion 3D 60fps chữ Zero-Box 2 màu 80/20 & kiểm duyệt Mắt Thần"
+    "Sản xuất video ngắn FB Reels 9:16 chuẩn 60fps theo quy trình 4 Trạm từ chủ đề mới",
+    "Chạy Trạm 1: Cào bài gốc, viết kịch bản 5 nhịp sắc bén & sinh giọng Hải Đăng",
+    "Dựng Remotion 60fps bằng 5 đồ chơi đời thật + kiểm định QC & TypeScript"
   ]
 }

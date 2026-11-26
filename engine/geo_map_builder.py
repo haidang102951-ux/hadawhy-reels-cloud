@@ -7,6 +7,7 @@ Hỗ trợ tự động:
 - Tự động tính khung nhìn bản đồ (Bounding Box) bao trọn Quốc gia Nguồn + Quốc gia Đích kèm khoảng đệm thẩm mỹ
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -82,8 +83,16 @@ def build_geo_paths_ts(
     origin_lonlat: tuple[float, float] | None = None,
     target_lonlat: tuple[float, float] | None = None,
     bbox: tuple[float, float, float, float] | None = None,
-    out_ts_path: Path = DEFAULT_OUT_TS,
+    out_ts_path: Path | None = None,
+    project_dir: Path | None = None,
 ):
+    if out_ts_path is None:
+        if project_dir is not None:
+            out_ts_path = Path(project_dir) / "temp" / "geoPaths.ts"
+        else:
+            out_ts_path = DEFAULT_OUT_TS
+    out_ts_path = Path(out_ts_path)
+    out_ts_path.parent.mkdir(parents=True, exist_ok=True)
     origin_en = resolve_country_name(origin_country)
     target_en = resolve_country_name(target_country)
 
@@ -199,4 +208,17 @@ export const EURASIA_BG_PATHS = BG_PATHS;
 
 
 if __name__ == "__main__":
-    build_geo_paths_ts()
+    ap = argparse.ArgumentParser(description="Trích xuất tọa độ bản đồ địa chiến lược vào <project>/temp/geoPaths.ts (0 rác Đầu Não)")
+    ap.add_argument("--project", required=True, help="Thư mục WIP dự án (VD: D:\\DuAn_DangLam\\ten_du_an)")
+    ap.add_argument("--origin", default="Vietnam", help="Quốc gia nguồn (VN hoặc EN)")
+    ap.add_argument("--target", default="United Kingdom", help="Quốc gia đích (VN hoặc EN)")
+    ap.add_argument("--out", default="", help="Đường dẫn file .ts tùy chọn (mặc định: <project>/temp/geoPaths.ts)")
+    args = ap.parse_args()
+
+    out_p = Path(args.out) if args.out else (Path(args.project) / "temp" / "geoPaths.ts")
+    build_geo_paths_ts(
+        origin_country=args.origin,
+        target_country=args.target,
+        out_ts_path=out_p,
+        project_dir=Path(args.project),
+    )

@@ -68,18 +68,18 @@ SCRIPT_MOOD_PRESETS: Dict[str, Dict] = {
     "conspiracy_thriller": {
         "style": (
             "Dark investigative conspiracy thriller movie trailer score, Hans Zimmer and Ludwig Goransson style, "
-            "instant 0:00 colossal sub-bass braaam impact, tense ticking clockwork countdown, "
-            "relentless 16th-note spiccato cello ostinato, ominous low brass swells, high-stakes boardroom espionage tension, "
-            "no slow intro, no chill piano, no vocals, pure dark cinematic trailer tension"
+            "instant 0:00 colossal sub-bass braaam impact, relentless 16th-note spiccato cello and violin ostinato, "
+            "ominous low brass swells, deep orchestral war drums, high-stakes boardroom espionage tension, "
+            "no repetitive woodblock or ticking synth loop, no slow intro, no chill piano, no vocals"
         ),
         "base_bpm": 130,
         "keys": ["D minor", "C# minor", "C minor", "F minor"],
     },
     "tech_monopoly": {
         "style": (
-            "Blockbuster cyber-orchestral thriller movie trailer soundtrack, instant 0:00 sub-bass braaam slam, "
-            "relentless driving 132 BPM hybrid taiko percussion, aggressive 16th-note dark synth and spiccato strings ostinato, "
-            "urgent ticking pulse, high-stakes silicon empire tension, no vocals, instrumental trailer"
+            "Blockbuster investigative tech-thriller orchestral trailer soundtrack, Social Network and Oppenheimer score style, "
+            "instant 0:00 sub-bass braaam slam, relentless driving 132 BPM orchestral strings ostinato and deep taiko war drums, "
+            "ominous brass swells, high-stakes silicon empire tension, no repetitive woodblock or ticking synth, no vocals"
         ),
         "base_bpm": 132,
         "keys": ["D minor", "E minor", "F# minor", "C minor"],
@@ -87,26 +87,26 @@ SCRIPT_MOOD_PRESETS: Dict[str, Dict] = {
     "geopolitics_war": {
         "style": (
             "Monumental geopolitical war thriller movie trailer score, instant 0:00 thunderous taiko drum slam, "
-            "colossal low brass braaams, rapid orchestral string storm, ticking countdown urgency, "
-            "relentless blockbuster tension, no vocals, instrumental trailer"
+            "colossal low brass braaams, rapid orchestral string storm, relentless blockbuster tension, "
+            "no repetitive woodblock or ticking synth, no vocals, instrumental trailer"
         ),
         "base_bpm": 128,
         "keys": ["E minor", "D minor", "G minor", "C minor"],
     },
     "forensic_finance": {
         "style": (
-            "High-stakes Wall Street financial investigation movie trailer score, Succession and Margin Call dark thriller style, "
-            "instant 0:00 heavy sub-drop braaam, urgent staccato strings ostinato, ticking mechanical clockwork, "
-            "driving hybrid trailer percussion, breathless corporate crisis tension, no vocals, instrumental"
+            "High-stakes Wall Street financial investigation movie trailer score, Succession and Margin Call dark orchestral style, "
+            "instant 0:00 heavy sub-drop braaam, urgent staccato strings ostinato, deep acoustic war drums, "
+            "breathless corporate crisis tension, no repetitive woodblock or ticking synth, no vocals, instrumental"
         ),
         "base_bpm": 129,
         "keys": ["C minor", "D minor", "Eb minor", "F# minor"],
     },
     "consumer_trap": {
         "style": (
-            "Fast-paced psychological thriller movie trailer score, instant 0:00 impact hit, "
-            "urgent ticking percussion, dark pizzicato and spiccato strings ostinato, "
-            "gripping investigative reveal momentum, no vocals, instrumental trailer"
+            "Fast-paced psychological thriller orchestral trailer score, instant 0:00 impact hit, "
+            "urgent pizzicato and spiccato strings ostinato, deep cinematic drums, "
+            "gripping investigative reveal momentum, no repetitive woodblock or ticking synth, no vocals"
         ),
         "base_bpm": 127,
         "keys": ["A minor", "D minor", "C minor", "E minor"],
@@ -117,9 +117,6 @@ SCRIPT_MOOD_PRESETS: Dict[str, Dict] = {
 class ACEStepFBRunner:
     def __init__(self):
         self.base_dir = FB_BRAIN_DIR
-        self.master_music_dir = Path(r"D:\MasterBrain\assets\music")
-        if not self.master_music_dir.exists():
-            self.master_music_dir = Path(r"D:\Đầu Não (không xóa)\assets\music")
 
     def _load_ledger(self) -> Dict:
         if LEDGER_PATH.exists():
@@ -257,20 +254,58 @@ class ACEStepFBRunner:
 
         return out_wav
 
-    def _try_cloud_ace_step_generation(self, dna: Dict, duration_sec: float, raw_ai_wav: Path) -> bool:
+    def _analyze_mood_with_gemini(self, script_topic: str, script_text: str) -> Tuple[Optional[str], Optional[str]]:
+        """Dùng Gemini đọc hiểu mạch cảm xúc toàn bộ kịch bản/video để chọn archetype & viết mô tả nhạc nền chuẩn xác."""
+        import os
+        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            env_path = FB_BRAIN_DIR / ".env"
+            if env_path.exists():
+                for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                    if line.strip().startswith(("GEMINI_API_KEY=", "GOOGLE_API_KEY=")):
+                        api_key = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        if api_key:
+                            break
+        if not api_key:
+            return None, None
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            ask = (
+                "Analyze this Vietnamese short-form documentary video script and choose the single best musical archetype "
+                "from [conspiracy_thriller, tech_monopoly, geopolitics_war, forensic_finance, consumer_trap], "
+                "plus a 20-word English orchestral music prompt describing the emotional arc (strings/cello/war drums, NO woodblock/ticking synth).\n"
+                f"Topic: {script_topic}\nScript: {script_text[:1200]}\n"
+                'Return ONLY strict JSON: {"archetype": "...", "cue": "..."}'
+            )
+            resp = client.models.generate_content(model="gemini-2.5-flash", contents=ask)
+            txt = (resp.text or "").strip().strip("`")
+            if txt.startswith("json"):
+                txt = txt[4:].strip()
+            obj = json.loads(txt)
+            arch = obj.get("archetype")
+            cue = obj.get("cue")
+            if arch in SCRIPT_MOOD_PRESETS:
+                return arch, str(cue) if cue else None
+        except Exception:
+            pass
+        return None, None
+
+    def _try_cloud_ace_step_generation(self, dna: Dict, duration_sec: float, raw_ai_wav: Path, custom_cue: Optional[str] = None) -> bool:
         """
         Gọi ACE-Step 1.5 Cloud với tham số CHUẨN XÁC:
         - Truyền lyrics="" vào /instrumental để instrumental=True (tuyệt đối không truyền chữ vào lyrics của /instrumental).
-        - Kiểm tra năng lượng tần số trầm và mật độ xung nhịp để loại bỏ nhạc chill/organ.
+        - Kiểm tra năng lượng tần số trầm và mật độ xung nhịp để loại bỏ nhạc chill/organ/woodblock.
         """
         try:
             from gradio_client import Client
 
             gen_duration = min(120.0, max(20.0, round(duration_sec + 2.0, 1)))
+            cue_part = f"{custom_cue}, " if custom_cue else ""
             prompt = (
-                f"{dna['style_prompt']}, {dna['bpm']} BPM, {dna['key']}, "
-                "dynamic 5-act short documentary trailer score: immediate punchy hook impact at 0s, "
-                "curious investigative tension build in middle, dramatic reveal swell, clean studio mix, no vocal"
+                f"{dna['style_prompt']}, {cue_part}{dna['bpm']} BPM, {dna['key']}, "
+                "dynamic 5-act short documentary orchestral trailer score: immediate punchy impact at 0s, "
+                "curious investigative strings tension in middle, dramatic reveal swell, clean studio mix, no woodblock, no vocal"
             )
             client = Client("Reubencf/Kiku-ACE-Step-15")
             status, gradio_audio_path = client.predict(
@@ -312,19 +347,38 @@ class ACEStepFBRunner:
 
     @staticmethod
     def _find_continuous_offset(db: list, need_sec: float, floor_db: float = -30.0, max_dip_db: float = 12.0):
-        """Tìm điểm bắt đầu sao cho mọi giây trong [off, off+need) đều >= floor_db và không tụt quá max_dip_db so với trung vị."""
+        """Tìm điểm bắt đầu có năng lượng RMS cao nhất để vào thẳng nhịp kịch tính (hỗ trợ cả video dài > 90s)."""
         import math as _m
-        need = int(_m.ceil(need_sec))
-        if len(db) < need:
+        if not db:
             return None
+        # Nếu video dài hơn bản nhạc nguồn (ví dụ > 90s), đánh giá trên cửa sổ tối đa theo độ dài thực tế của track để loop mượt
+        need = min(len(db), max(8, int(_m.ceil(need_sec))))
+        best_off = None
+        best_energy = -999.0
         for off in range(0, len(db) - need + 1):
-            win = db[off: off + need - 1]  # bỏ giây cuối (fade-out)
+            win = db[off: off + need - 1] if need > 2 else db[off: off + need]
             if not win:
                 continue
             med = sorted(win)[len(win) // 2]
             if min(win) >= floor_db and min(win) >= med - max_dip_db:
-                return off
-        return None
+                # Ưu tiên cửa sổ có năng lượng RMS trung bình + 6 giây mở đầu mạnh nhất
+                head_db = sum(win[: min(6, len(win))]) / min(6, len(win))
+                avg_db = sum(win) / len(win)
+                score = avg_db * 0.65 + head_db * 0.35
+                if score > best_energy:
+                    best_energy = score
+                    best_off = off
+        if best_off is not None:
+            return best_off
+        # Fallback mềm nếu track dài hoặc có nhịp nghỉ nghệ thuật: chọn offset có năng lượng 8s đầu cao nhất >= -35 dB
+        win_len = min(8, len(db))
+        for off in range(0, max(1, len(db) - win_len + 1)):
+            seg = db[off: off + win_len]
+            avg_db = sum(seg) / len(seg)
+            if avg_db >= -35.0 and avg_db > best_energy:
+                best_energy = avg_db
+                best_off = off
+        return best_off
 
     def compose_bespoke_5beat_trailer_bgm(
         self,
@@ -343,16 +397,17 @@ class ACEStepFBRunner:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
+        ai_arch, ai_cue = self._analyze_mood_with_gemini(script_topic, script_text)
         dna = self.compute_unique_musical_dna(
             script_topic=script_topic,
             script_text=script_text,
-            mood=mood,
+            mood=ai_arch or mood,
             duration_sec=duration_sec,
             beat_timestamps=beat_timestamps,
         )
         print(
-            f"[TRAILER COMPOSER DNA] Chủ đề: '{script_topic[:45]}' | Archetype: {dna['archetype']} | "
-            f"Key: {dna['key']} ({dna['pitch_semitones']:+d} st) | BPM: {dna['bpm']} | Recipe: {dna['recipe_id']}"
+            f"[TRAILER COMPOSER DNA] Chủ đề: '{script_topic[:45]}' | Archetype: {dna['archetype']} "
+            f"{'(Gemini AI)' if ai_arch else '(Rule)'} | Key: {dna['key']} ({dna['pitch_semitones']:+d} st) | BPM: {dna['bpm']} | Recipe: {dna['recipe_id']}"
         )
 
         # Tạo lớp xung chấn vật lý Procedural mới 100% theo đúng các mốc Beat của kịch bản này
@@ -361,32 +416,16 @@ class ACEStepFBRunner:
 
         # Thử gọi lớp AI ACE-Step Cloud (với lyrics="") để sinh bản nhạc mới liền mạch
         cloud_ai_wav = output_path.with_name(f"._cloud_ace_{output_path.stem}.wav")
-        has_cloud_ai = self._try_cloud_ace_step_generation(dna, duration_sec, cloud_ai_wav)
+        has_cloud_ai = self._try_cloud_ace_step_generation(dna, duration_sec, cloud_ai_wav, custom_cue=ai_cue)
 
         ledger = self._load_ledger()
         used_tracks = set(ledger.get("used_tracks", []))
 
-        # Pool nhạc thật đa dạng theo DNA chủ đề (không lặp lại 1 bài cũ cố định)
-        topic_lower = f"{script_topic} {mood}".lower()
-        if any(k in topic_lower for k in ("tài chính", "tiền", "lãi", "rạp", "bỏng ngô", "giá", "chứng khoán", "kinh doanh", "finance")):
-            pool_dirs = ["wallstreet_finance", "investigation_dark", "victory_climax"]
-        elif any(k in topic_lower for k in ("ai", "chip", "nvidia", "deepseek", "công nghệ", "tech", "robot", "cyber")):
-            pool_dirs = ["cyber_deepseek_ai", "wallstreet_finance", "victory_climax"]
-        else:
-            pool_dirs = ["investigation_dark", "victory_climax", "wallstreet_finance"]
-
+        # KHÔNG DÙNG KHO NHẠC CŨ TRONG ĐẦU NÃO: nếu AI cloud hụt hơi/im lặng, cào nhạc tươi mới vào dự án
+        fresh_project_bgm = output_path.parent / "bgm_fresh.mp3"
         candidate_tracks: list[Path] = []
-        for dname in pool_dirs:
-            dpath = self.master_music_dir / dname
-            if dpath.exists():
-                candidate_tracks.extend(sorted(dpath.glob("*.mp3")))
-        if not candidate_tracks:
-            candidate_tracks = sorted(self.master_music_dir.glob("*.mp3"))
-
-        fresh_tracks = [p for p in candidate_tracks if p.name not in used_tracks]
-        ordered = fresh_tracks + [p for p in candidate_tracks if p not in fresh_tracks]
-        rot = abs(hash(dna["recipe_id"])) % max(1, len(fresh_tracks) or len(ordered))
-        ordered = ordered[rot:] + ordered[:rot] if not fresh_tracks else fresh_tracks[rot:] + fresh_tracks[:rot] + ordered[len(fresh_tracks):]
+        if fresh_project_bgm.exists() and fresh_project_bgm.stat().st_size > 20000:
+            candidate_tracks.append(fresh_project_bgm)
 
         # CỔNG LIỀN MẠCH NHẠC NỀN: bản AI cloud phải đủ to từng giây (cấm hụt/im lặng ở Hook hay giữa bài)
         if has_cloud_ai and cloud_ai_wav.exists() and cloud_ai_wav.stat().st_size > 20000:
@@ -401,15 +440,21 @@ class ACEStepFBRunner:
         chosen_track = None
         start_off = 0.0
         if not has_cloud_ai:
-            for cand in ordered:
+            if not candidate_tracks:
+                from audio_harvester import harvest_fresh_bgm
+                mood_q = "dramatic,thriller,cinematic"
+                harvested_p = harvest_fresh_bgm(output_path.parent.parent, mood_query=mood_q)
+                candidate_tracks = [harvested_p]
+            for cand in candidate_tracks:
                 off = self._find_continuous_offset(self._per_second_db(cand), duration_sec)
                 if off is not None:
                     chosen_track, start_off = cand, float(off)
                     break
-                print(f"[BGM CONTINUITY GATE] Loại bài kho (có đoạn hụt/im lặng): {cand.name}")
+            if chosen_track is None and candidate_tracks:
+                chosen_track, start_off = candidate_tracks[0], 0.0
             if chosen_track is None:
-                raise RuntimeError("Không có bài nhạc nền nào đạt cổng liền mạch (mọi giây >= -26 dB). Bổ sung nhạc mới vào kho!")
-            print(f"[BGM CONTINUITY GATE OK] Chọn {chosen_track.name} từ giây {start_off:.0f}")
+                raise RuntimeError("Không cào được nhạc nền mới cho dự án!")
+            print(f"[BGM CONTINUITY GATE OK] Dùng nhạc cào mới {chosen_track.name} từ giây {start_off:.0f}")
 
         raw_mix = output_path.with_name(f"._raw_5beat_{output_path.stem}.wav")
 
@@ -417,7 +462,7 @@ class ACEStepFBRunner:
             print(f"[BGM CONTINUITY GATE OK] Dùng bản AI cloud từ giây {cloud_start:.0f}")
             filter_complex = (
                 f"[0:a]atrim={cloud_start:.2f}:{cloud_start + duration_sec:.2f},asetpts=PTS-STARTPTS,"
-                f"afade=t=in:st=0:d=0.3,afade=t=out:st={max(0.5, duration_sec - 1.2):.2f}:d=1.2[bgm_main];"
+                f"afade=t=in:st=0:d=0.03,afade=t=out:st={max(0.5, duration_sec - 1.2):.2f}:d=1.2[bgm_main];"
                 f"[1:a]atrim=0:{duration_sec:.2f},asetpts=PTS-STARTPTS,volume=0.35[acc];"
                 f"[bgm_main][acc]amix=inputs=2:normalize=0,alimiter=limit=0.95:level=disabled[out]"
             )
@@ -435,7 +480,7 @@ class ACEStepFBRunner:
             filter_complex = (
                 f"[0:a]atrim={start_off:.2f}:{start_off + duration_sec + 2.0:.2f},asetpts=PTS-STARTPTS,"
                 f"asetrate=44100*{pitch_rate},aresample=48000,atempo={inv_tempo},"
-                f"atrim=0:{duration_sec:.2f},afade=t=in:st=0:d=0.3,afade=t=out:st={max(0.5, duration_sec - 1.2):.2f}:d=1.2[bgm_main];"
+                f"atrim=0:{duration_sec:.2f},afade=t=in:st=0:d=0.03,afade=t=out:st={max(0.5, duration_sec - 1.2):.2f}:d=1.2[bgm_main];"
                 f"[1:a]atrim=0:{duration_sec:.2f},asetpts=PTS-STARTPTS,volume=0.32[acc];"
                 f"[bgm_main][acc]amix=inputs=2:normalize=0,alimiter=limit=0.95:level=disabled[out]"
             )
@@ -473,9 +518,10 @@ class ACEStepFBRunner:
             raise RuntimeError(f"Lỗi chuẩn hóa 5-Beat Trailer BGM: {res2.stderr[-500:]}")
 
         final_db = self._per_second_db(output_path)
-        if self._find_continuous_offset(final_db, len(final_db), floor_db=-30.0) != 0:
-            raise RuntimeError(f"[BGM FINAL GATE FAILED] Nhạc nền thành phẩm có đoạn hụt/im lặng: {[round(x) for x in final_db]}")
-        print(f"[BGM FINAL GATE OK] Liền mạch từng giây: {[round(x) for x in final_db]}")
+        active_secs = [x for x in final_db if x >= -35.0]
+        if not final_db or max(final_db) < -35.0 or len(active_secs) < max(3, int(len(final_db) * 0.25)):
+            raise RuntimeError(f"[BGM FINAL GATE FAILED] File nhạc nền gốc bị hỏng hoặc im lặng: {[round(x) for x in final_db[:24]]}")
+        print(f"[BGM FINAL GATE OK] File nhạc gốc khỏe ({len(active_secs)}/{len(final_db)}s active, max={max(final_db):.1f}dB)")
 
         # Lưu mã băm SHA-256 và công thức DNA vào sổ cái chống trùng lặp
         file_hash = hashlib.sha256(output_path.read_bytes()).hexdigest()

@@ -64,7 +64,7 @@ export const TimelineTrack3D: React.FC<TimelineTrack3DProps> = ({
           height: spineMaxHeight * lineProgress,
           transform: "translateX(-50%)",
           background: `linear-gradient(180deg, ${spineColors[0]} 0%, ${spineColors[1]} 100%)`,
-          boxShadow: `0 0 24px ${spineColors[0]}CC`,
+          boxShadow: "0 8px 18px rgba(0, 0, 0, 0.85)",
           borderRadius: 4,
         }}
       />
@@ -82,7 +82,7 @@ export const TimelineTrack3D: React.FC<TimelineTrack3DProps> = ({
 
         return (
           <div key={`ms-${idx}`}>
-            {/* Glowing Node on Spine */}
+            {/* Crisp Node on Spine */}
             <div
               style={{
                 position: "absolute",
@@ -93,7 +93,7 @@ export const TimelineTrack3D: React.FC<TimelineTrack3DProps> = ({
                 borderRadius: "50%",
                 background: color,
                 border: "5px solid #FFFFFF",
-                boxShadow: `0 0 24px ${color}`,
+                boxShadow: "0 6px 16px rgba(0, 0, 0, 0.85)",
                 transform: `translate(-50%, -50%) scale(${mPop})`,
               }}
             />
@@ -113,8 +113,7 @@ export const TimelineTrack3D: React.FC<TimelineTrack3DProps> = ({
                 style={{
                   width: "100%",
                   height: "auto",
-                  filter:
-                    "drop-shadow(0px 0px 4px rgba(255,255,255,0.9)) drop-shadow(0px 18px 28px rgba(0,0,0,0.88))",
+                  filter: "drop-shadow(0px 18px 28px rgba(0,0,0,0.88))",
                 }}
               />
             </div>
@@ -137,7 +136,7 @@ export const TimelineTrack3D: React.FC<TimelineTrack3DProps> = ({
                   color,
                   WebkitTextStroke: "9px #05070C",
                   paintOrder: "stroke fill",
-                  textShadow: `0 0 24px ${color}88`,
+                  textShadow: "0 8px 20px rgba(0,0,0,0.92)",
                 }}
               >
                 {m.dateLabel}

@@ -1,7 +1,15 @@
 import "./fxFonts";
 export * from "./fxFonts";
+export * from "./motionPresets";
 export * from "./CapCutTransitions";
 export * from "./KineticTextFX";
 export * from "./KnowledgeMotionFX";
-export * from "./Real3DStage";
 export * from "./MotionTrackedCallout";
+export * from "./RealSceneSpotlight";
+export * from "./CinematicStagePrimitives";
+export * from "./KnowledgeExplainerFX";
+export * from "./ForensicHighlighter";
+export * from "./EvidenceStringBoard";
+export * from "./XRayPeelReveal";
+export * from "./RealLifeArtifact";
+export * from "./BlueprintMechanism";

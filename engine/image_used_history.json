@@ -1,0 +1,84 @@
+{
+  "entries": [
+    {
+      "date": "2026-11-24T11:08:08",
+      "project": "ThuatToanGoiXe",
+      "entity_id": "bg_city_night_traffic",
+      "url": "https://images.pexels.com/photos/14648214/pexels-photo-14648214.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2",
+      "md5": "e22401b1d965562ddb7185068f87d159",
+      "dhash": "20c06699b53c362c"
+    },
+    {
+      "date": "2026-11-24T11:08:16",
+      "project": "ThuatToanGoiXe",
+      "entity_id": "bg_rainy_street_traffic",
+      "url": "https://img5.thuthuatphanmem.vn/uploads/2021/12/18/hinh-nen-canh-dep-dai-duong_110522928.jpg",
+      "md5": "f088b95f1cdc03b8e55633551ac5f8a8",
+      "dhash": "8783133333e3e3c3"
+    },
+    {
+      "date": "2026-11-24T11:08:55",
+      "project": "ThuatToanGoiXe",
+      "entity_id": "prop_smartphone_gps",
+      "url": "https://as1.ftcdn.net/jpg/22/47/38/52/1000_F_2247385285_qMc1tcwnH9OVnRd2n3PFenzD0ViUmLzP.jpg",
+      "md5": "85f23e452c8b03c2f71dcf5414498e1a",
+      "dhash": "d99bbbbbbb3bbbdb"
+    },
+    {
+      "date": "2026-11-24T11:09:21",
+      "project": "ThuatToanGoiXe",
+      "entity_id": "prop_sedan_car",
+      "url": "https://www.pngall.com/wp-content/uploads/2018/04/Sedan-Transparent.png",
+      "md5": "05295ebc93d1bcec1aec4d8defcac6cc",
+      "dhash": "308038e49ccce400"
+    },
+    {
+      "date": "2026-11-24T11:09:46",
+      "project": "ThuatToanGoiXe",
+      "entity_id": "prop_server_rack",
+      "url": "https://as1.ftcdn.net/jpg/11/66/91/86/1000_F_1166918637_Fvl0LCGTvfN8JMWGRw7EQypwvyKJOKKV.jpg",
+      "md5": "9938d0a9855214dd8e1b454855d74ed0",
+      "dhash": "b079796969696930"
+    },
+    {
+      "date": "2026-11-24T11:10:10",
+      "project": "ThuatToanGoiXe",
+      "entity_id": "prop_stopwatch",
+      "url": "https://as1.ftcdn.net/v2/jpg/19/41/68/88/1000_F_1941688878_Pw1iFItJgwuHoqy8J31E9lCs54H5Lpmv.jpg",
+      "md5": "5f89c407c378e5d2da33a27048cbf049",
+      "dhash": "3733316969697332"
+    },
+    {
+      "date": "2026-11-24T11:10:58",
+      "project": "ThuatToanGoiXe",
+      "entity_id": "bg_rainy_street_traffic",
+      "url": "https://cafefcdn.com/203337114487263232/2026/10/1/img5162-1790859408212-1790859409409305584639-1790898433968-1790898435597684661883.jpg",
+      "md5": "235537b6a830dc9082bc7078d5d00d1b",
+      "dhash": "ccac8c0149680f86"
+    },
+    {
+      "date": "2026-11-24T11:11:38",
+      "project": "ThuatToanGoiXe",
+      "entity_id": "prop_server_rack",
+      "url": "https://i.dell.com/is/image/DellContent/content/dam/ss2/product-images/peripherals/server/prod-1960-enterprise-rack-24u-rf-800x620.png?fmt=png-alpha&wid=800&hei=620",
+      "md5": "6670d33943fb35c92b9c04310df2116a",
+      "dhash": "0e8e8e8e8e8e8e16"
+    },
+    {
+      "date": "2026-11-24T11:12:21",
+      "project": "ThuatToanGoiXe",
+      "entity_id": "prop_smartphone_gps",
+      "url": "https://static0.anpoimages.com/wordpress/wp-content/uploads/wm/2024/11/how-to-make-google-maps-the-default-navigation-app-on-your-iphone.jpg",
+      "md5": "a1cfa86b0b949a0f3efe43e4215dbb44",
+      "dhash": "716949032ead8f87"
+    },
+    {
+      "date": "2026-11-24T11:12:47",
+      "project": "ThuatToanGoiXe",
+      "entity_id": "prop_stopwatch",
+      "url": "https://www.saturnstopwatches.co.uk/user/products/hanhart-robust-mechanical-stopwatch-194-p.jpg",
+      "md5": "dcf6cf125a7a1bfd7a492b56fa1a1b64",
+      "dhash": "b0b270ccd4d4dc70"
+    }
+  ]
+}

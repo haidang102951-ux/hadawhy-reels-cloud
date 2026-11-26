@@ -40,8 +40,8 @@ export const CoinStream: React.FC<CoinStreamProps> = ({
   blockedAtT,
   dotColor = "#FFD600",
   useDollarNotes = false,
-  primaryItemSrc = "objects/coin.png",
-  secondaryItemSrc = "objects/dollar.png",
+  primaryItemSrc = "",
+  secondaryItemSrc = "",
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -85,7 +85,7 @@ export const CoinStream: React.FC<CoinStreamProps> = ({
           height: 12,
           borderRadius: "50%",
           background: dotColor,
-          boxShadow: `0 0 14px ${dotColor}`,
+          boxShadow: "0 4px 10px rgba(0,0,0,0.8)",
           transform: `translate(-50%, -50%) scale(${pulse})`,
           opacity: 0.85,
         }}
@@ -120,10 +120,10 @@ export const CoinStream: React.FC<CoinStreamProps> = ({
                 width: 66,
                 transform: `translate(-50%, -50%) scale(${1 - overT * 1.6}) rotate(${overT * 140}deg)`,
                 opacity: Math.max(0, 1 - overT * 2.2),
-                filter: "drop-shadow(0 0 12px #FF2E4C)",
+                filter: "drop-shadow(0 8px 14px rgba(0,0,0,0.85))",
               }}
             >
-              <Img src={staticFile(primaryItemSrc)} style={{ width: "100%" }} />
+              {primaryItemSrc ? <Img src={staticFile(primaryItemSrc)} style={{ width: "100%" }} /> : null}
             </div>
           );
         }
@@ -144,13 +144,18 @@ export const CoinStream: React.FC<CoinStreamProps> = ({
             top: pt.y,
             width: useSecond ? 88 : 74,
             transform: `translate(-50%, -50%) scale(${scale}) rotate(${rot}deg)`,
-            filter: "drop-shadow(0px 8px 14px rgba(0,0,0,0.75)) drop-shadow(0px 0px 10px rgba(255,215,0,0.45))",
+            filter: "drop-shadow(0px 10px 18px rgba(0,0,0,0.85))",
           }}
         >
-          <Img
-            src={staticFile(useSecond ? secondaryItemSrc : primaryItemSrc)}
-            style={{ width: "100%", height: "auto" }}
-          />
+          {(() => {
+            const itemSrc = useSecond ? (secondaryItemSrc || primaryItemSrc) : primaryItemSrc;
+            return itemSrc ? (
+              <Img
+                src={staticFile(itemSrc)}
+                style={{ width: "100%", height: "auto" }}
+              />
+            ) : null;
+          })()}
         </div>
       );
     }
@@ -175,7 +180,7 @@ export const CoinStream: React.FC<CoinStreamProps> = ({
           height: 68,
           borderRadius: "50%",
           background: "radial-gradient(circle, rgba(255,30,60,0.95) 0%, rgba(160,0,25,0.95) 100%)",
-          boxShadow: "0 0 28px rgba(255, 40, 70, 0.95), 0 8px 20px rgba(0,0,0,0.8)",
+          boxShadow: "0 10px 24px rgba(0,0,0,0.88)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

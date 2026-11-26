@@ -71,7 +71,7 @@ export const AnatomyCallout3D: React.FC<AnatomyCallout3DProps> = ({
             width: "100%",
             height: "auto",
             filter:
-              "drop-shadow(0px 0px 6px rgba(255,255,255,0.92)) drop-shadow(0px 24px 36px rgba(0,0,0,0.9))",
+              "drop-shadow(0px 8px 16px rgba(0,0,0,0.85)) drop-shadow(0px 24px 36px rgba(0,0,0,0.9))",
           }}
         />
       </div>
@@ -150,7 +150,7 @@ export const AnatomyCallout3D: React.FC<AnatomyCallout3DProps> = ({
                 color,
                 WebkitTextStroke: "9px #05070C",
                 paintOrder: "stroke fill",
-                textShadow: `0 0 24px ${color}88`,
+                textShadow: "0 8px 20px rgba(0,0,0,0.92)",
               }}
             >
               {c.value}

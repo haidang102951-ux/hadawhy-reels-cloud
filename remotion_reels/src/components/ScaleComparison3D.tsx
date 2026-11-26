@@ -23,8 +23,8 @@ export const ScaleComparison3D: React.FC<ScaleComparison3DProps> = ({
   leftItemSrc,
   leftItemCount,
   leftLabel,
-  rightPrimaryStackSrc = "objects/dollar.png",
-  rightSecondaryStackSrc = "objects/coin.png",
+  rightPrimaryStackSrc = "",
+  rightSecondaryStackSrc = "",
   rightTopTitle,
   rightStartNumber = 0,
   rightTargetNumber,
@@ -80,7 +80,7 @@ export const ScaleComparison3D: React.FC<ScaleComparison3DProps> = ({
           borderRadius: 4,
           background:
             "linear-gradient(90deg, rgba(255,255,255,0.15) 0%, rgba(255,230,0,0.85) 50%, rgba(255,59,71,0.9) 100%)",
-          boxShadow: "0 0 28px rgba(255, 200, 0, 0.55)",
+          boxShadow: "0 8px 20px rgba(0, 0, 0, 0.85)",
         }}
       />
 
@@ -109,8 +109,7 @@ export const ScaleComparison3D: React.FC<ScaleComparison3DProps> = ({
               style={{
                 width: "100%",
                 height: "auto",
-                filter:
-                  "drop-shadow(0px 0px 4px rgba(255,255,255,0.9)) drop-shadow(0px 16px 22px rgba(0,0,0,0.85))",
+                filter: "drop-shadow(0px 16px 24px rgba(0,0,0,0.88))",
               }}
             />
           </div>
@@ -158,7 +157,7 @@ export const ScaleComparison3D: React.FC<ScaleComparison3DProps> = ({
                 "linear-gradient(180deg, rgba(255, 59, 71, 0.96) 0%, rgba(190, 15, 35, 0.92) 65%, rgba(90, 5, 18, 0.95) 100%)",
               border: "3px solid rgba(255, 200, 180, 0.85)",
               boxShadow:
-                "0 0 50px rgba(255, 59, 71, 0.75), inset 0 12px 28px rgba(255, 255, 255, 0.35)",
+                "0 18px 36px rgba(0, 0, 0, 0.88), inset 0 12px 28px rgba(255, 255, 255, 0.25)",
             }}
           />
 
@@ -180,10 +179,15 @@ export const ScaleComparison3D: React.FC<ScaleComparison3DProps> = ({
                   filter: "drop-shadow(0 12px 18px rgba(0,0,0,0.85))",
                 }}
               >
-                <Img
-                  src={staticFile(useSec ? rightSecondaryStackSrc : rightPrimaryStackSrc)}
-                  style={{ width: "100%", height: "auto" }}
-                />
+                {(() => {
+                  const stackSrc = useSec ? (rightSecondaryStackSrc || rightPrimaryStackSrc) : rightPrimaryStackSrc;
+                  return stackSrc ? (
+                    <Img
+                      src={staticFile(stackSrc)}
+                      style={{ width: "100%", height: "auto" }}
+                    />
+                  ) : null;
+                })()}
               </div>
             );
           })}
@@ -216,7 +220,7 @@ export const ScaleComparison3D: React.FC<ScaleComparison3DProps> = ({
                 color: "#FF3B47",
                 WebkitTextStroke: "11px #05070C",
                 paintOrder: "stroke fill",
-                textShadow: "0 0 36px rgba(255, 59, 71, 0.95)",
+                textShadow: "0 10px 26px rgba(0, 0, 0, 0.95)",
                 lineHeight: 1.05,
                 whiteSpace: "nowrap",
               }}
@@ -263,7 +267,7 @@ export const ScaleComparison3D: React.FC<ScaleComparison3DProps> = ({
             border: "7px solid #FF3B47",
             borderRadius: 12,
             background: "transparent",
-            boxShadow: "0 0 28px rgba(255, 59, 71, 0.55)",
+            boxShadow: "0 12px 24px rgba(0, 0, 0, 0.85)",
             whiteSpace: "nowrap",
           }}
         >

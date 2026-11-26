@@ -44,33 +44,84 @@ def get_rembg_session(model_name: str = "bria-rmbg"):
     return _GLOBAL_SESSIONS[model_name]
 
 
-def defringe_rgba(image_rgba: Image.Image, iterations: int = 2) -> Image.Image:
+def defringe_alpha(
+    image_rgba: Image.Image,
+    erode_px: int = 1,
+    feather_radius: float = 0.7,
+    iterations: int = 2,
+) -> Image.Image:
     """
-    Khử viền lem nhem (De-fringing / Color Bleed Removal).
-    Triệt tiêu viền sáng/tối halo bao quanh các chi tiết cơ khí, kính xe hoặc sợi tóc.
+    Khử viền sáng/răng cưa chuyên sâu cho nền xanh đêm #061224 (SOTA De-fringing & Alpha Erosion):
+    1. Khử nhiễm màu nền trắng/xám (Color Decontamination): kéo màu RGB vùng lõi bên trong ra biên
+       và dập tắt các pixel halo trắng/xám bám quanh vật thể tối màu.
+    2. Co nhẹ mặt nạ biên `erode_px` (1px) để cắt sạch rìa nền sáng còn sót.
+    3. Làm mềm biên `feather_radius` (0.7px GaussianBlur lên kênh alpha) triệt tiêu răng cưa.
     """
     if image_rgba.mode != "RGBA":
         image_rgba = image_rgba.convert("RGBA")
-    
+
     r, g, b, a = image_rgba.split()
     alpha_np = np.array(a, dtype=np.uint8)
-    
-    # Nếu ảnh hoàn toàn trong suốt hoặc đục hoàn toàn, bỏ qua
+
     if np.all(alpha_np == 0) or np.all(alpha_np == 255):
         return image_rgba
-        
-    rgb_img = Image.merge("RGB", (r, g, b))
-    
-    # Mở rộng màu của các pixel bên trong ra vùng biên bán trong suốt (alpha mờ)
-    for _ in range(iterations):
-        # Tạo mask cho các vùng bán trong suốt (viền lem)
+
+    # Bước 1: Lan truyền màu lõi (inner RGB) ra vùng biên bán trong suốt & dập halo trắng/xám
+    rgb_np = np.stack(
+        [np.array(r, dtype=np.float32), np.array(g, dtype=np.float32), np.array(b, dtype=np.float32)],
+        axis=-1,
+    )
+    core_mask_pil = a.filter(ImageFilter.MinFilter(5))
+    core_mask = np.array(core_mask_pil, dtype=np.uint8) >= 220
+
+    # Tính màu tham chiếu tối/sạch từ vùng sát lõi bằng MinFilter nhẹ để triệt viền trắng sáng
+    r_inner = np.array(r.filter(ImageFilter.MinFilter(3)), dtype=np.float32)
+    g_inner = np.array(g.filter(ImageFilter.MinFilter(3)), dtype=np.float32)
+    b_inner = np.array(b.filter(ImageFilter.MinFilter(3)), dtype=np.float32)
+    inner_min_rgb = np.stack([r_inner, g_inner, b_inner], axis=-1)
+
+    # Ở dải viền ngoài (~2-3px quanh mép alpha), khử hoàn toàn lốm đốm trắng/xám có độ sáng cao hơn lõi
+    edge_zone = (alpha_np > 0) & (~core_mask)
+    rgb_max = np.max(rgb_np, axis=-1)
+    rgb_min = np.min(rgb_np, axis=-1)
+    sat = rgb_max - rgb_min
+    luma = 0.299 * rgb_np[..., 0] + 0.587 * rgb_np[..., 1] + 0.114 * rgb_np[..., 2]
+    inner_luma = 0.299 * inner_min_rgb[..., 0] + 0.587 * inner_min_rgb[..., 1] + 0.114 * inner_min_rgb[..., 2]
+
+    # Pixel biên bị ám nền trắng/xám (ít bão hòa hoặc sáng vọt hơn phần thịt bên trong) -> thay bằng màu lõi tối hơn
+    white_gray_halo = edge_zone & ((luma > inner_luma + 14.0) | ((rgb_min > 145.0) & (sat < 42.0)))
+    rgb_np[white_gray_halo] = inner_min_rgb[white_gray_halo]
+
+    # Hòa mượt thêm 2 vòng ở sát biên để chuyển sắc tự nhiên
+    rgb_img = Image.fromarray(np.clip(rgb_np, 0, 255).astype(np.uint8), mode="RGB")
+    for _ in range(max(1, iterations)):
         edge_mask = a.filter(ImageFilter.FIND_EDGES).filter(ImageFilter.MaxFilter(3))
-        # Blur nhẹ RGB ở viền để hòa tan màu nền cũ
         rgb_blurred = rgb_img.filter(ImageFilter.BoxBlur(1))
         rgb_img = Image.composite(rgb_img, rgb_blurred, ImageChops.invert(edge_mask))
-        
+
+    # Bước 2: Co nhẹ mặt nạ biên 1px (MinFilter(3)) nhưng bảo toàn chi tiết mảnh nếu quá nhỏ
+    clean_a = a
+    if erode_px > 0:
+        k_size = max(3, int(erode_px) * 2 + 1)
+        eroded = a.filter(ImageFilter.MinFilter(k_size))
+        if np.any(np.array(eroded, dtype=np.uint8) > 32):
+            clean_a = eroded
+
+    # Bước 3: Làm mềm biên 0.7px bằng GaussianBlur lên kênh alpha
+    if feather_radius > 0:
+        clean_a = clean_a.filter(ImageFilter.GaussianBlur(float(feather_radius)))
+        # Dọn sạch bụi alpha siêu mờ (< 6) ngoài rìa sau khi blur để nền trong suốt tuyệt đối
+        a_arr = np.array(clean_a, dtype=np.uint8)
+        a_arr[a_arr < 6] = 0
+        clean_a = Image.fromarray(a_arr, mode="L")
+
     r_clean, g_clean, b_clean = rgb_img.split()
-    return Image.merge("RGBA", (r_clean, g_clean, b_clean, a))
+    return Image.merge("RGBA", (r_clean, g_clean, b_clean, clean_a))
+
+
+def defringe_rgba(image_rgba: Image.Image, iterations: int = 2) -> Image.Image:
+    """Alias tương thích ngược gọi thẳng defringe_alpha chuẩn mới."""
+    return defringe_alpha(image_rgba, erode_px=1, feather_radius=0.7, iterations=iterations)
 
 
 def apply_alpha_feathering(image_rgba: Image.Image, radius: float = 1.0) -> Image.Image:
@@ -218,27 +269,92 @@ def add_3d_double_shadow(
     return canvas
 
 
+def check_cutout_completeness(rgba_img: Image.Image, border_px: int = 3) -> dict:
+    """
+    Kiểm tra kênh alpha trên 4 viền rộng 3px (trên, dưới, trái, phải) TRƯỚC khi crop_tight
+    để phát hiện ảnh bị chém cụt mất đầu/nửa xe/nửa vật thể ở mép khung hình.
+    """
+    if rgba_img.mode != "RGBA":
+        rgba_img = rgba_img.convert("RGBA")
+    alpha = np.array(rgba_img.split()[-1], dtype=np.uint8)
+    h, w = alpha.shape
+    if h == 0 or w == 0:
+        return {
+            "top_touch": 1.0,
+            "bottom_touch": 1.0,
+            "left_touch": 1.0,
+            "right_touch": 1.0,
+            "subject_area_ratio": 0.0,
+            "is_chopped": True,
+            "is_bottom_only_touch": False,
+        }
+
+    b = max(1, min(border_px, h // 4, w // 4))
+    mask = alpha > 128
+    top_touch = float(mask[:b, :].mean())
+    bottom_touch = float(mask[h - b:, :].mean())
+    left_touch = float(mask[:, :b].mean())
+    right_touch = float(mask[:, w - b:].mean())
+    subject_area_ratio = float(mask.mean())
+
+    side_or_top_chopped = (left_touch > 0.08) or (right_touch > 0.08) or (top_touch > 0.08)
+    bottom_chopped = bottom_touch > 0.12
+    too_small = subject_area_ratio < 0.05
+    is_chopped = side_or_top_chopped or bottom_chopped or too_small
+    is_bottom_only_touch = (not side_or_top_chopped) and (not too_small) and bottom_chopped
+
+    return {
+        "top_touch": round(top_touch, 4),
+        "bottom_touch": round(bottom_touch, 4),
+        "left_touch": round(left_touch, 4),
+        "right_touch": round(right_touch, 4),
+        "subject_area_ratio": round(subject_area_ratio, 4),
+        "is_chopped": is_chopped,
+        "is_bottom_only_touch": is_bottom_only_touch,
+    }
+
+
+def apply_soft_bottom_fade(rgba_img: Image.Image, fade_ratio: float = 0.18) -> Image.Image:
+    """Nhân gradient làm tan mượt kênh alpha ở 18% cạnh đáy để xóa sạch đường cắt ngang sắc lẹm."""
+    if rgba_img.mode != "RGBA":
+        rgba_img = rgba_img.convert("RGBA")
+    r, g, b, a = rgba_img.split()
+    alpha_np = np.array(a, dtype=np.float32)
+    h, _ = alpha_np.shape
+    fade_h = max(4, int(h * fade_ratio))
+    if fade_h < h:
+        grad = np.linspace(1.0, 0.0, fade_h, dtype=np.float32).reshape(-1, 1)
+        alpha_np[h - fade_h:, :] *= grad
+    new_a = Image.fromarray(np.clip(alpha_np, 0, 255).astype(np.uint8))
+    return Image.merge("RGBA", (r, g, b, new_a))
+
+
 def cutout_image(
     input_path: str | Path,
     output_path: str | Path = None,
     model_name: str = "bria-rmbg",
     defringe: bool = True,
-    edge_feather: float = 0.8,
-    add_rim_light: bool = True,
+    edge_feather: float = 0.7,
+    add_rim_light: bool = False,
     rim_color=(255, 190, 70),
     rim_width: int = 14,
     add_floor_shadow: bool = False,
+    add_3d_shadow: bool = None,
     double_shadow: bool = True,
     canvas_size=None,
     add_stroke: bool = False,
     stroke_color=(255, 255, 255),
     stroke_width: int = 4,
-    crop_tight: bool = False
+    crop_tight: bool = False,
+    soft_bottom_fade: bool = False,
 ) -> Path:
     """
     Bóc tách nền của ảnh và xuất ra sản phẩm chuyên nghiệp chuẩn SOTA 2026.
-    Tự động áp dụng De-fringing, Alpha Feathering, Soft Rim Light và 3D Double Shadow.
+    Tự động áp dụng defringe_alpha (co biên 1px + GaussianBlur 0.7px + khử viền trắng/xám), Soft Rim Light và 3D Double Shadow.
+    (Hỗ trợ cả 2 tên gọi: add_floor_shadow và alias add_3d_shadow)
     """
+    if add_3d_shadow is not None:
+        add_floor_shadow = add_3d_shadow
     input_path = Path(input_path)
     if output_path is None:
         output_path = input_path.with_name(f"{input_path.stem}_cutout.png")
@@ -253,12 +369,15 @@ def cutout_image(
     session = get_rembg_session(model_name)
     result_img = rembg.remove(orig, session=session)
     
-    # 2. De-fringing khử viền lem nhem
+    # 2. Khử viền trắng/xám + co biên 1px + làm mềm alpha 0.7px (defringe_alpha)
     if defringe:
-        result_img = defringe_rgba(result_img, iterations=2)
-        
-    # 3. Làm mềm viền Alpha Feathering
-    if edge_feather > 0:
+        result_img = defringe_alpha(
+            result_img,
+            erode_px=1,
+            feather_radius=edge_feather if edge_feather > 0 else 0.7,
+            iterations=2,
+        )
+    elif edge_feather > 0:
         result_img = apply_alpha_feathering(result_img, radius=edge_feather)
     
     # 4. Thêm viền sticker (nếu bật)
@@ -269,6 +388,10 @@ def cutout_image(
     if add_rim_light:
         result_img = add_soft_rim_light(result_img, color=rim_color, width=rim_width)
         
+    # 5b. Làm tan mượt 18% cạnh đáy cho ảnh bán thân/chân dung chạm đáy
+    if soft_bottom_fade:
+        result_img = apply_soft_bottom_fade(result_img, fade_ratio=0.18)
+
     # 6. Thêm bóng sàn 3D (2 tầng hoặc 1 tầng)
     if add_floor_shadow:
         if double_shadow:
@@ -292,7 +415,7 @@ if __name__ == "__main__":
     parser.add_argument("input", help="Đường dẫn ảnh đầu vào")
     parser.add_argument("-o", "--output", help="Đường dẫn file PNG kết quả", default=None)
     parser.add_argument("--model", default="bria-rmbg", choices=["bria-rmbg", "birefnet-general", "isnet-general-use", "u2net"], help="Model bóc tách")
-    parser.add_argument("--rim", action="store_true", default=True, help="Bật Soft Rim Light")
+    parser.add_argument("--rim", action="store_true", default=False, help="Bật Soft Rim Light (mặc định TẮT theo Luật 3)")
     parser.add_argument("--no-rim", dest="rim", action="store_false", help="Tắt Soft Rim Light")
     parser.add_argument("--rim-color", default="255,190,70", help="Màu ánh sáng ven R,G,B")
     parser.add_argument("--shadow", action="store_true", help="Bật bóng sàn phối cảnh 3D 2 lớp")

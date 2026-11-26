@@ -5,7 +5,8 @@ export interface HookBeatSpec {
   start: number;
   eyebrow: string;
   hero: string;
-  accent: string;
+  accent?: string;
+  heroColor?: string;
   heroSize?: number;
 }
 
@@ -30,7 +31,7 @@ export const HaDaWhyFontFaces: React.FC = () => (
     }
     @font-face {
       font-family: 'KanitBlack';
-      src: url('${staticFile("fonts/Kanit-Black.ttf")}') format('truetype');
+      src: url('${staticFile("fonts/BeVietnamPro-Black.ttf")}') format('truetype');
       font-weight: 900;
       font-style: normal;
     }
@@ -39,7 +40,7 @@ export const HaDaWhyFontFaces: React.FC = () => (
 
 export const KineticHookHeader: React.FC<KineticHookHeaderProps> = ({
   beat,
-  top = 310,
+  top = 290,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -47,10 +48,10 @@ export const KineticHookHeader: React.FC<KineticHookHeaderProps> = ({
   const hookSpring = spring({
     frame: Math.max(0, frame - beat.start),
     fps,
-    config: { damping: 12, stiffness: 210, mass: 0.75 },
+    config: { damping: 22, stiffness: 280, mass: 0.8 },
   });
-  const hookScale = interpolate(hookSpring, [0, 1], [1.38, 1.0]);
-  const hookOpacity = interpolate(hookSpring, [0, 0.35], [0, 1], {
+  const hookScale = interpolate(hookSpring, [0, 1], [1.22, 1.0]);
+  const hookOpacity = interpolate(hookSpring, [0, 0.3], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -62,7 +63,8 @@ export const KineticHookHeader: React.FC<KineticHookHeaderProps> = ({
         left: 540,
         top,
         width: 980,
-        transform: `translate(-50%, -50%) scale(${hookScale})`,
+        transform: `translate3d(-50%, -50%, 0) scale(${hookScale})`,
+        willChange: "transform",
         opacity: hookOpacity,
         textAlign: "center",
         pointerEvents: "none",
@@ -72,14 +74,14 @@ export const KineticHookHeader: React.FC<KineticHookHeaderProps> = ({
       <div
         style={{
           fontFamily: "BeVietnamProBlack, sans-serif",
-          fontSize: 42,
-          lineHeight: 1.12,
+          fontSize: 36,
+          lineHeight: 1.15,
           letterSpacing: "0.03em",
-          color: "#FFFFFF",
-          WebkitTextStroke: "8px #05070C",
+          color: beat.accent?.startsWith("#") ? beat.accent : "#A0ECFF",
+          WebkitTextStroke: "6px #05070C",
           paintOrder: "stroke fill",
           textShadow: "0 8px 22px rgba(0,0,0,0.95)",
-          marginBottom: 8,
+          marginBottom: 6,
           textTransform: "uppercase",
           whiteSpace: "nowrap",
         }}
@@ -88,13 +90,13 @@ export const KineticHookHeader: React.FC<KineticHookHeaderProps> = ({
       </div>
       <div
         style={{
-          fontFamily: "KanitBlack, sans-serif",
-          fontSize: beat.heroSize ?? 76,
-          lineHeight: 1.04,
-          color: beat.accent,
-          WebkitTextStroke: "11px #05070C",
+          fontFamily: "BeVietnamProBlack, sans-serif",
+          fontSize: beat.heroSize ?? 72,
+          lineHeight: 1.06,
+          color: beat.heroColor ?? "#FFE600",
+          WebkitTextStroke: "10px #05070C",
           paintOrder: "stroke fill",
-          textShadow: `0 0 36px ${beat.accent}AA, 0 10px 28px rgba(0,0,0,0.96)`,
+          textShadow: "0 10px 26px rgba(0,0,0,0.95)",
           textTransform: "uppercase",
           whiteSpace: "nowrap",
         }}

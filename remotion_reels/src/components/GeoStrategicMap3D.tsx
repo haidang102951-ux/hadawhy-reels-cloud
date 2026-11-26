@@ -9,7 +9,6 @@ import {
   UK_PATHS,
   VIETNAM_PATHS,
 } from "./eurasiaGeoPaths";
-import { StickerPop } from "./StickerPop";
 
 export interface GeoStrategicMap3DProps {
   startFrame: number;
@@ -144,7 +143,7 @@ export const GeoStrategicMap3D: React.FC<GeoStrategicMap3DProps> = ({
               "radial-gradient(circle at 50% 45%, rgba(16, 36, 68, 0.85) 0%, rgba(6, 12, 24, 0.95) 100%)",
             border: "2px solid rgba(100, 175, 255, 0.28)",
             boxShadow:
-              "0 35px 70px rgba(0,0,0,0.92), inset 0 0 50px rgba(0, 180, 255, 0.14)",
+              "0 35px 70px rgba(0,0,0,0.92)",
             overflow: "hidden",
           }}
         >
@@ -195,7 +194,7 @@ export const GeoStrategicMap3D: React.FC<GeoStrategicMap3DProps> = ({
                 stroke="#FFFFFF"
                 strokeWidth={2.5}
                 style={{
-                  filter: "drop-shadow(0px 0px 14px rgba(255, 230, 0, 0.95))",
+                  filter: "drop-shadow(0px 8px 16px rgba(0,0,0,0.85))",
                 }}
               />
             ))}
@@ -208,7 +207,7 @@ export const GeoStrategicMap3D: React.FC<GeoStrategicMap3DProps> = ({
                 stroke="#FFFFFF"
                 strokeWidth={2.5}
                 style={{
-                  filter: "drop-shadow(0px 0px 16px rgba(255, 59, 71, 0.95))",
+                  filter: "drop-shadow(0px 8px 16px rgba(0,0,0,0.85))",
                 }}
               />
             ))}
@@ -270,7 +269,7 @@ export const GeoStrategicMap3D: React.FC<GeoStrategicMap3DProps> = ({
               strokeDasharray={1}
               strokeDashoffset={1 - arcProgress}
               style={{
-                filter: "drop-shadow(0px 0px 14px rgba(255, 230, 0, 0.95))",
+                filter: "drop-shadow(0px 8px 16px rgba(0,0,0,0.85))",
               }}
             />
 
@@ -283,7 +282,7 @@ export const GeoStrategicMap3D: React.FC<GeoStrategicMap3DProps> = ({
                 stroke="#FF3B47"
                 strokeWidth={5}
                 style={{
-                  filter: "drop-shadow(0px 0px 18px #FF3B47)",
+                  filter: "drop-shadow(0px 8px 16px rgba(0,0,0,0.85))",
                 }}
               />
             )}
@@ -342,8 +341,7 @@ export const GeoStrategicMap3D: React.FC<GeoStrategicMap3DProps> = ({
               borderRadius: 26,
               overflow: "hidden",
               border: "4px solid rgba(255, 255, 255, 0.92)",
-              boxShadow:
-                "0 28px 60px rgba(0,0,0,0.92), 0 0 38px rgba(255, 59, 71, 0.45)",
+              boxShadow: "0 28px 60px rgba(0,0,0,0.92)",
             }}
           >
             <Img
@@ -378,32 +376,31 @@ export const GeoStrategicMap3D: React.FC<GeoStrategicMap3DProps> = ({
         </div>
       )}
 
-      {rightFloatingIconSrc && (
-        <StickerPop
-          src={rightFloatingIconSrc}
-          x={rightFloatingIconPos?.x ?? 855}
-          y={rightFloatingIconPos?.y ?? 1140}
-          width={rightFloatingIconPos?.width ?? 235}
-          startFrame={startFrame + 115}
-          baseRotate={-18}
-          floatSpeed={0.09}
-          floatAmp={8}
-          rimColor="rgba(255, 215, 0, 0.95)"
-          shudderAtFrame={startFrame + 128}
+      {rightFloatingIconSrc && localFrame >= 115 && (
+        <Img
+          src={rightFloatingIconSrc.startsWith("http") || rightFloatingIconSrc.startsWith("/") ? rightFloatingIconSrc : staticFile(rightFloatingIconSrc)}
+          style={{
+            position: "absolute",
+            left: rightFloatingIconPos?.x ?? 855,
+            top: rightFloatingIconPos?.y ?? 1140,
+            width: rightFloatingIconPos?.width ?? 220,
+            transform: `translate(-50%, -50%) translateY(${Math.sin(localFrame * 0.08) * 8}px) rotate(-10deg)`,
+            filter: "drop-shadow(0 20px 30px rgba(0, 0, 0, 0.92))",
+          }}
         />
       )}
 
-      {leftFloatingIconSrc && (
-        <StickerPop
-          src={leftFloatingIconSrc}
-          x={leftFloatingIconPos?.x ?? 210}
-          y={leftFloatingIconPos?.y ?? 1160}
-          width={leftFloatingIconPos?.width ?? 205}
-          startFrame={startFrame + 98}
-          baseRotate={10}
-          floatSpeed={0.08}
-          floatAmp={7}
-          rimColor="rgba(255, 80, 90, 0.95)"
+      {leftFloatingIconSrc && localFrame >= 98 && (
+        <Img
+          src={leftFloatingIconSrc.startsWith("http") || leftFloatingIconSrc.startsWith("/") ? leftFloatingIconSrc : staticFile(leftFloatingIconSrc)}
+          style={{
+            position: "absolute",
+            left: leftFloatingIconPos?.x ?? 210,
+            top: leftFloatingIconPos?.y ?? 1160,
+            width: leftFloatingIconPos?.width ?? 200,
+            transform: `translate(-50%, -50%) translateY(${Math.cos(localFrame * 0.08) * 7}px) rotate(8deg)`,
+            filter: "drop-shadow(0 20px 30px rgba(0, 0, 0, 0.92))",
+          }}
         />
       )}
     </div>

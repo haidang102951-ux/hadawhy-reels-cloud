@@ -4,7 +4,8 @@ echo =====================================================================
 echo    ĐẦU NÃO SẢN XUẤT VIDEO NGẮN FB REELS - FORENSIC GLASS NOIR
 echo =====================================================================
 echo.
-echo Đang kích hoạt FB Reels Master Orchestrator...
-cd /d "D:\Đầu Não Video Ngắn FB (không xóa)\engine"
-python fb_reels_master_orchestrator.py
+echo Cách dùng:
+echo   python engine\render_reel.py --comp ^<TenComp^> --project "D:\DuAn_DangLam\^<ten_du_an^>" --name "^<TenVideo^>"
+echo.
+python "%~dp0engine\render_reel.py" --help
 pause

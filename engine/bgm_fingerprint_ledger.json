@@ -9,7 +9,16 @@
     "5282cbd2da75e0ec06fe525a2ed476d9e059deaece22101aeb3e1a8a07b6ca90",
     "5da98b8507364f0ba81be96c645644fb75e6d4fbb1cffcdf6fcbed81d9c9c384",
     "61052f8374c96ea289028acfe203687f8b646a13e795f58d8e4a740e6b5e4ed7",
-    "eb3b826685e8bd434fad2feef1385931846b11b032209972babd4f18356004bb"
+    "eb3b826685e8bd434fad2feef1385931846b11b032209972babd4f18356004bb",
+    "22cf6511251e262737bf14b2906de78befa6457478fb5053a2fb07df36976fd5",
+    "61a4f66d9572b61bf16ca915eadd142bbd45f7cf906f635793894937accdcf3a",
+    "1997f1e26c4dad37d137f4b72b684850c8850140ac544cd786222f85cf5d8b55",
+    "506ad361e4f9a50b4f00333b4f8b8acf88cc5bcf5cefe7f5c750dde3ecf1902c",
+    "d8edfecc6ae847eb2d4e92478f7e1ffcee2e285f8edcd8a413aaed36bc961ee0",
+    "9a5c87a34fe2ea4a5babd5fbbac782b9ddaf9b027d7304c32557aa1d9c45cd00",
+    "4741a2627efb9982264c076c01d6fca737552f1fd7028677e65db3db87594121",
+    "5da92ddd8d3766ee96faff30927d4c550d70fb0ab3ef8451f001f921963a97e1",
+    "85f4b991dcd713043cf1feec8a29a71973914160dbbaedf06af84562df52f10a"
   ],
   "used_recipes": [
     "forensic_finance_st-2_tm1.156_s0.0_18.0_53.2_42.0_14.0",
@@ -21,13 +30,26 @@
     "tech_monopoly_st-2_tm1.24_s0.0_23.6_58.6_34.0_13.5",
     "conspiracy_thriller_st0_tm1.156_s0.8_20.4_51.4_42.8_14.0",
     "conspiracy_thriller_st-3_tm1.24_s0.8_21.2_46.9_42.8_12.5",
-    "consumer_trap_st-2_tm1.18_s0.4_22.8_58.6_38.0_14.0"
+    "consumer_trap_st-2_tm1.18_s0.4_22.8_58.6_38.0_14.0",
+    "consumer_trap_st-3_tm1.216_s0.4_18.0_55.0_37.2_12.5",
+    "conspiracy_thriller_st-2_tm1.132_s0.8_20.4_48.7_37.2_14.0",
+    "geopolitics_war_st-2_tm1.156_s0.8_26.0_54.1_35.6_13.5",
+    "tech_monopoly_st-2_tm1.216_s0.0_18.8_46.9_37.2_12.5",
+    "conspiracy_thriller_st-2_tm1.204_s0.4_19.6_54.1_35.6_12.5",
+    "tech_monopoly_st1_tm1.18_s0.4_23.6_55.9_34.0_13.5",
+    "tech_monopoly_st-1_tm1.204_s0.4_21.2_58.6_42.0_14.0",
+    "conspiracy_thriller_st0_tm1.132_s0.0_28.4_57.7_39.6_14.0",
+    "conspiracy_thriller_st0_tm1.216_s0.4_18.8_52.3_34.0_12.5"
   ],
   "used_tracks": [
+    "wallstreet_finance_cinema_02.mp3",
     "epic_victory_climax_02.mp3",
-    "dark_investigation_mystery_02.mp3",
     "epic_victory_climax_01.mp3",
-    "dark_investigation_tension_01.mp3",
-    "wallstreet_finance_momentum_03.mp3"
+    "dark_investigation_orchestral_03.mp3",
+    "wallstreet_finance_drive_01.mp3",
+    "cyber_ai_future_02.mp3",
+    "dark_investigation_mystery_02.mp3",
+    "wallstreet_finance_momentum_03.mp3",
+    "dark_investigation_tension_01.mp3"
   ]
 }
